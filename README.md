@@ -42,6 +42,44 @@ python3 -m http.server 8000
 
 Then open <http://localhost:8000>.
 
+## Install it as an app (iPad / iPhone / Android / desktop)
+
+The app is a **PWA** (manifest, icons and an offline service worker are included).
+Once it is opened over an `https://` URL (for example the Cloudflare URL below):
+
+- **iPad / iPhone (Safari):** tap the Share button → **Add to Home Screen**.
+- **Android (Chrome):** tap the three-dot menu → **Install app** / **Add to Home screen**.
+- **Desktop Chrome/Edge:** click the install icon in the address bar.
+
+It then opens full-screen with its own icon, works offline, and respects iPad
+safe areas (notch / home indicator). On-screen keyboards no longer zoom the page.
+
+## Deploy to Cloudflare Workers
+
+This repo includes `wrangler.toml` configured for **Workers Static Assets**, so no
+server code is needed.
+
+1. Create a free Cloudflare account and note your `*.workers.dev` subdomain
+   (Workers & Pages → choose/set a subdomain).
+2. From the project folder on your computer:
+
+```bash
+npx wrangler login
+npx wrangler deploy
+```
+
+The app goes live at `https://al-shwareb.<your-subdomain>.workers.dev` — open that
+URL on the iPad and use *Add to Home Screen*. Every `wrangler deploy` after a
+`git pull` publishes the newest version.
+
+Alternative without the command line: in the Cloudflare dashboard go to
+**Workers & Pages → Create → Workers → upload static assets** and drag in this
+folder (or a ZIP of it).
+
+> Note: data still lives only on each device's browser storage. The service worker
+> caches the app itself for offline use; keep using **Settings → Export backup** to
+> safeguard or move your transactions.
+
 ## How your data is stored
 
 Everything is saved in the browser's `localStorage` on **this device and this
@@ -52,8 +90,16 @@ Use **Import backup** to restore, or to move the data to another browser/device.
 ## Project structure
 
 ```
-index.html        # app markup
-css/styles.css    # all styling (mobile-first)
-js/storage.js     # data model, localStorage, profit calculations
-js/app.js         # screens, forms, rendering and events
+index.html             # app markup
+manifest.webmanifest   # PWA install metadata
+sw.js                  # service worker (offline caching)
+wrangler.toml          # Cloudflare Workers Static Assets config
+.wranglerignore        # files excluded from the Workers upload
+icons/                 # app icons (PWA, Apple touch icon, favicon)
+css/styles.css         # all styling (mobile/tablet-first, dark theme)
+js/storage.js          # data model, localStorage, profit calculations
+js/app.js              # screens, forms, rendering and events
 ```
+
+When you change app files, bump `CACHE_VERSION` in `sw.js` so installed copies
+pick up the update.

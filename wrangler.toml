@@ -1,0 +1,11 @@
+# Cloudflare Workers configuration for the Al-shwareb static PWA.
+# Deploy with:  npx wrangler deploy
+# Your app will be served at https://al-shwareb.<your-subdomain>.workers.dev
+name = "al-shwareb"
+compatibility_date = "2026-10-27"
+
+# Pure static site: Workers Static Assets serves every file in this folder.
+[assets]
+directory = "./"
+# Unknown paths fall back to the app shell.
+not_found_404 = "./index.html"

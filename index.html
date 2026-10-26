@@ -2,9 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0a0d0b" />
   <title>Al-shwareb — Profit Tracker</title>
+
+  <!-- PWA / install support -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Al-shwareb" />
+  <meta name="description" content="Personal profit & documentation tracker with day-accurate monthly profit splits." />
+
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
@@ -192,5 +203,13 @@
 
   <script src="js/storage.js"></script>
   <script src="js/app.js"></script>
+  <script>
+    // Enable offline use / installability. Ignored on browsers without SW support.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch((err) => console.warn('SW registration failed:', err));
+      });
+    }
+  </script>
 </body>
 </html>

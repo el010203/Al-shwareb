@@ -1,0 +1,11 @@
+# Files that must not be uploaded as public static assets.
+.git
+.wrangler
+node_modules
+.wranglerignore
+wrangler.toml
+README.md
+icons/icon-source.svg
+icons/icon-maskable-source.svg
+.DS_Store
+Thumbs.db

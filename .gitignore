@@ -1,0 +1,7 @@
+# Cloudflare / tooling
+.wrangler/
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
