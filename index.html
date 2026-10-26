@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Al-shwareb — Profit Tracker</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+          <path d="M3 3v18h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M7 14l4-4 3 3 5-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div>
+          <h1>Al-shwareb</h1>
+          <p class="tagline">Profit &amp; Documentation Tracker</p>
+        </div>
+      </div>
+      <button id="open-settings" class="icon-btn" title="Settings &amp; Backup" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+          <path fill="currentColor" d="M12 8a4 4 0 100 8 4 4 0 000-8zm8.94 4a7.03 7.03 0 00-.14-1.37l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.61-.22l-2.39.96a7 7 0 00-1.35-.78l-.36-2.54a.5.5 0 00-.5-.43h-3.84a.5.5 0 00-.5.42l-.36 2.55c-.48.2-.93.46-1.35.78l-2.39-.96a.5.5 0 00-.61.22L3.05 8.4a.5.5 0 00.12.64l2.03 1.58c-.09.45-.14.91-.14 1.38s.05.93.14 1.37l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32c.14.24.42.34.67.22l2.39-.96c.42.32.87.58 1.35.78l.36 2.54c.04.25.25.43.5.43h3.84c.25 0 .46-.18.5-.43l.36-2.54c.48-.2.93-.46 1.35-.78l2.39.96c.25.1.53 0 .67-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58c.09-.44.14-.9.14-1.37z"/>
+        </svg>
+      </button>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="dashboard" role="tab">Dashboard</button>
+      <button class="tab" data-tab="transactions" role="tab">Transactions</button>
+      <button class="tab" data-tab="people" role="tab">People</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- ============ DASHBOARD ============ -->
+    <section id="tab-dashboard" class="tab-panel active">
+      <div class="filter-bar">
+        <label for="dash-person">Viewing</label>
+        <select id="dash-person" class="select"></select>
+      </div>
+
+      <div id="dash-cards" class="cards"></div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Monthly profit</h2>
+        </div>
+        <div id="dash-chart" class="chart-wrap"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Monthly breakdown</h2>
+        </div>
+        <div id="dash-table"></div>
+      </div>
+    </section>
+
+    <!-- ============ TRANSACTIONS ============ -->
+    <section id="tab-transactions" class="tab-panel">
+      <div class="panel form-panel">
+        <h2 id="tx-form-title">Add transaction</h2>
+        <form id="tx-form" novalidate>
+          <input type="hidden" id="tx-id" />
+          <div class="form-grid">
+            <div class="field">
+              <label for="tx-person">Person *</label>
+              <select id="tx-person" class="select" required></select>
+            </div>
+            <div class="field">
+              <label for="tx-period">Period (month) *</label>
+              <input type="month" id="tx-period" class="input" required />
+            </div>
+            <div class="field">
+              <label for="tx-amount">Money put *</label>
+              <input type="number" id="tx-amount" class="input" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required />
+            </div>
+            <div class="field">
+              <label for="tx-percent">Profit percent *</label>
+              <div class="input-suffix">
+                <input type="number" id="tx-percent" class="input" min="0" step="0.01" inputmode="decimal" placeholder="0" required />
+                <span>%</span>
+              </div>
+            </div>
+            <div class="field field-full">
+              <label for="tx-note">Documentation note</label>
+              <textarea id="tx-note" class="input" rows="2" placeholder="Details, source, anything worth documenting…"></textarea>
+            </div>
+          </div>
+          <div class="form-footer">
+            <div class="profit-preview">
+              Calculated profit: <strong id="tx-preview-profit">0.00</strong>
+              <span class="muted" id="tx-preview-return"></span>
+            </div>
+            <div class="form-actions">
+              <button type="button" id="tx-cancel" class="btn btn-ghost" hidden>Cancel</button>
+              <button type="submit" class="btn btn-primary" id="tx-submit">Add transaction</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label for="filter-person">Person</label>
+          <select id="filter-person" class="select"></select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-month">Month</label>
+          <select id="filter-month" class="select"></select>
+        </div>
+      </div>
+
+      <div id="tx-list"></div>
+    </section>
+
+    <!-- ============ PEOPLE ============ -->
+    <section id="tab-people" class="tab-panel">
+      <div class="panel">
+        <h2>Add a person</h2>
+        <form id="person-form" class="inline-form">
+          <input type="text" id="person-name" class="input" maxlength="40" placeholder="Person name" required />
+          <button type="submit" class="btn btn-primary">Add</button>
+        </form>
+        <p class="hint">Each person gets their own documentation and profit totals. No passwords — just pick the person when adding a transaction.</p>
+      </div>
+      <div id="people-list"></div>
+    </section>
+  </main>
+
+  <!-- ============ SETTINGS MODAL ============ -->
+  <div id="modal-settings" class="modal" hidden>
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-head">
+        <h2 id="settings-title">Settings &amp; backup</h2>
+        <button class="icon-btn" data-close-modal aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="set-currency">Currency label</label>
+          <input type="text" id="set-currency" class="input" maxlength="8" placeholder="EGP" />
+          <p class="hint">Shown next to money amounts, e.g. <strong>1,500.00 EGP</strong>.</p>
+        </div>
+
+        <hr class="divider" />
+
+        <h3>Backup &amp; restore</h3>
+        <p class="hint">Data lives only in this browser. Export a backup file regularly so you never lose it.</p>
+        <div class="btn-row">
+          <button id="btn-export" class="btn btn-secondary">Export backup (.json)</button>
+          <button id="btn-import" class="btn btn-secondary">Import backup</button>
+          <input type="file" id="import-file" accept="application/json,.json" hidden />
+        </div>
+
+        <hr class="divider" />
+
+        <h3>Sample &amp; danger zone</h3>
+        <div class="btn-row">
+          <button id="btn-sample" class="btn btn-ghost">Load sample data</button>
+          <button id="btn-erase" class="btn btn-danger">Erase everything</button>
+        </div>
+        <p id="storage-note" class="hint"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="js/storage.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
