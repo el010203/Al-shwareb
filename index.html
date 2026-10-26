@@ -70,12 +70,13 @@
               <select id="tx-person" class="select" required></select>
             </div>
             <div class="field">
-              <label for="tx-start">Start month *</label>
-              <input type="month" id="tx-start" class="input" required />
+              <label for="tx-start">Start date *</label>
+              <input type="date" id="tx-start" class="input" required />
             </div>
             <div class="field">
               <label for="tx-months">Period *</label>
               <select id="tx-months" class="select" required></select>
+              <p class="hint" id="tx-period-hint">Pick a duration in months.</p>
             </div>
             <div class="field">
               <label for="tx-amount">Money put *</label>
@@ -168,6 +169,21 @@
           <button id="btn-erase" class="btn btn-danger">Erase everything</button>
         </div>
         <p id="storage-note" class="hint"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ PERSON HISTORY MODAL ============ -->
+  <div id="modal-history" class="modal" hidden>
+    <div class="modal-backdrop" data-close-history></div>
+    <div class="modal-card modal-lg" role="dialog" aria-modal="true" aria-labelledby="history-title">
+      <div class="modal-head">
+        <h2 id="history-title">Transaction history</h2>
+        <button class="icon-btn" data-close-history aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="history-summary" class="history-summary"></div>
+        <div id="history-list"></div>
       </div>
     </div>
   </div>

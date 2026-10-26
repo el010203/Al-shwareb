@@ -11,6 +11,7 @@ const state = {
   filterPerson: 'all',
   filterMonth: 'all',
   editingId: null,
+  historyPersonId: null,
 };
 
 /* ---------- formatting helpers ---------- */
@@ -40,9 +41,22 @@ function formatMonth(ym) {
   return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
-function currentMonth() {
+function formatDate(iso) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function todayISO() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function round2(n) {
+  return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 }
 
 /* ---------- toast ---------- */
@@ -236,11 +250,11 @@ function renderTransactionList() {
         <table class="data">
           <thead>
             <tr>
-              <th>Period</th>
+              <th>Period (start → end)</th>
               ${showPerson ? '<th>Person</th>' : ''}
               <th class="num">Money put</th>
               <th class="num">Total %</th>
-              <th class="num">Per month</th>
+              <th class="num">Avg / month</th>
               <th class="num">Total profit</th>
               <th>Note</th>
               <th></th>
@@ -251,17 +265,17 @@ function renderTransactionList() {
               .map((tx) => {
                 const profit = Store.profitOf(tx);
                 const perMonthRate = Store.monthlyRateOf(tx);
-                const perMonthProfit = Store.monthlyProfitOf(tx);
+                const perMonthProfit = Store.avgMonthlyProfitOf(tx);
                 return `
               <tr>
                 <td data-label="Period">
                   <strong>${formatPeriod(tx)}</strong>
-                  <div class="muted" style="font-size:0.78rem">${tx.months} month${tx.months === 1 ? '' : 's'}</div>
+                  <div class="muted" style="font-size:0.78rem">${tx.months} month${tx.months === 1 ? '' : 's'} · ${Store.periodDays(tx)} days · ${statusPill(tx)}</div>
                 </td>
                 ${showPerson ? `<td data-label="Person"><span class="person-chip">${escapeHtml(Store.personName(tx.personId))}</span></td>` : ''}
                 <td data-label="Money put" class="num">${fmtMoney(tx.amount)}</td>
                 <td data-label="Total %" class="num"><span class="pct-pill">${fmtPct(tx.percent)}</span></td>
-                <td data-label="Per month" class="num">
+                <td data-label="Avg / month" class="num">
                   <strong>${fmtPct(perMonthRate)}</strong>
                   <div class="muted" style="font-size:0.78rem">${fmtMoney(perMonthProfit)}/mo</div>
                 </td>
@@ -290,10 +304,30 @@ function fillMonthsSelect() {
   }).join('');
 }
 
+function readDealDraft() {
+  return {
+    startDate: $('#tx-start').value,
+    months: Number($('#tx-months').value) || 1,
+    amount: Number($('#tx-amount').value) || 0,
+    percent: Number($('#tx-percent').value) || 0,
+  };
+}
+
+function updatePeriodHint() {
+  const { startDate, months } = readDealDraft();
+  const hint = $('#tx-period-hint');
+  if (!startDate) {
+    hint.textContent = 'Pick a duration in months.';
+    return;
+  }
+  const draft = { startDate, months };
+  const end = Store.endDate(draft);
+  const days = Store.periodDays(draft);
+  hint.textContent = `${formatDate(startDate)} → ${formatDate(end)} · ${days} day${days === 1 ? '' : 's'}`;
+}
+
 function updateProfitPreview() {
-  const amount = Number($('#tx-amount').value) || 0;
-  const totalPercent = Number($('#tx-percent').value) || 0;
-  const months = Number($('#tx-months').value) || 1;
+  const { startDate, months, amount, percent: totalPercent } = readDealDraft();
   const totalProfit = round2((amount * totalPercent) / 100);
   const perMonthRate = round2(totalPercent / months);
   const perMonthProfit = round2(totalProfit / months);
@@ -303,17 +337,26 @@ function updateProfitPreview() {
     amount > 0
       ? `(total returned: ${fmtMoney(amount + totalProfit)})`
       : '';
-  $('#tx-rate-hint').textContent =
-    months > 1
-      ? `${fmtPct(totalPercent)} over ${months} months = ${fmtPct(perMonthRate)} per month · ${fmtMoney(perMonthProfit)}/month`
-      : 'Percent covers the whole period.';
+
+  const parts = [];
+  if (months > 1) {
+    parts.push(`${fmtPct(totalPercent)} over ${months} months = ${fmtPct(perMonthRate)}/month avg · ${fmtMoney(perMonthProfit)}/month`);
+  } else {
+    parts.push('Percent covers the whole period.');
+  }
+  if (startDate && totalProfit > 0) {
+    const days = Store.periodDays({ startDate, months });
+    parts.push(`${fmtMoney(round2(totalProfit / days))}/day`);
+  }
+  $('#tx-rate-hint').textContent = parts.join(' · ');
+  updatePeriodHint();
 }
 
 function resetTxForm() {
   state.editingId = null;
   $('#tx-form').reset();
   $('#tx-id').value = '';
-  $('#tx-start').value = currentMonth();
+  $('#tx-start').value = todayISO();
   $('#tx-months').value = '1';
   $('#tx-form-title').textContent = 'Add transaction';
   $('#tx-submit').textContent = 'Add transaction';
@@ -327,7 +370,7 @@ function startEdit(id) {
   state.editingId = id;
   $('#tx-id').value = id;
   $('#tx-person').value = tx.personId;
-  $('#tx-start').value = tx.startMonth;
+  $('#tx-start').value = tx.startDate;
   $('#tx-months').value = String(tx.months);
   $('#tx-amount').value = tx.amount;
   $('#tx-percent').value = tx.percent;
@@ -341,9 +384,15 @@ function startEdit(id) {
 }
 
 function formatPeriod(tx) {
-  const start = formatMonth(tx.startMonth);
-  if (tx.months === 1) return escapeHtml(start);
-  return `${escapeHtml(start)} → ${escapeHtml(formatMonth(Store.endMonth(tx)))}`;
+  const start = formatDate(tx.startDate);
+  const end = formatDate(Store.endDate(tx));
+  return `${escapeHtml(start)} → ${escapeHtml(end)}`;
+}
+
+function statusPill(tx) {
+  const status = Store.statusOf(tx);
+  const label = status === 'active' ? 'Active' : status === 'ended' ? 'Ended' : 'Upcoming';
+  return `<span class="status-pill status-${status}">${label}</span>`;
 }
 
 /* ============================================================
@@ -378,6 +427,7 @@ function renderPeople() {
           <div class="person-meta">${fmtPct(s.percent)} overall</div>
         </div>
         <div class="person-actions">
+          <button class="btn btn-sm btn-secondary" data-action="history-person" data-id="${p.id}">History</button>
           <button class="btn btn-sm btn-ghost" data-action="rename-person" data-id="${p.id}">Rename</button>
           <button class="btn btn-sm btn-danger" data-action="delete-person" data-id="${p.id}">Delete</button>
         </div>
@@ -413,6 +463,85 @@ function exportBackup() {
   a.remove();
   URL.revokeObjectURL(url);
   toast('Backup file downloaded.');
+}
+
+/* ============================================================
+   PERSON HISTORY MODAL
+   ============================================================ */
+
+function openHistory(personId) {
+  state.historyPersonId = personId;
+  renderHistory();
+  $('#modal-history').hidden = false;
+}
+
+function closeHistory() {
+  state.historyPersonId = null;
+  $('#modal-history').hidden = true;
+}
+
+function renderHistory() {
+  const person = Store.personById(state.historyPersonId);
+  if (!person) {
+    closeHistory();
+    return;
+  }
+  const txs = Store.getTransactions({ personId: person.id });
+  const s = Store.summarize(txs);
+
+  $('#history-title').textContent = `${person.name} — transaction history`;
+  $('#history-summary').innerHTML = `
+    <div class="history-stat"><span class="label">Transactions</span><strong>${s.count}</strong></div>
+    <div class="history-stat"><span class="label">Money invested</span><strong>${fmtMoney(s.invested)}</strong></div>
+    <div class="history-stat"><span class="label">Total profit</span><strong class="profit-text">${fmtMoney(s.profit)}</strong></div>
+    <div class="history-stat"><span class="label">Overall %</span><strong>${fmtPct(s.percent)}</strong></div>`;
+
+  if (!txs.length) {
+    $('#history-list').innerHTML = `
+      <div class="empty-state"><span class="big">🧾</span>No transactions for ${escapeHtml(person.name)} yet.</div>`;
+    return;
+  }
+
+  $('#history-list').innerHTML = `
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Period (start → end)</th>
+            <th>Status</th>
+            <th class="num">Money put</th>
+            <th class="num">Total %</th>
+            <th class="num">Profit</th>
+            <th>Note</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${txs
+            .map(
+              (tx) => `
+            <tr>
+              <td data-label="Period">
+                <strong>${formatPeriod(tx)}</strong>
+                <div class="muted" style="font-size:0.78rem">${tx.months} month${tx.months === 1 ? '' : 's'} · ${Store.periodDays(tx)} days</div>
+              </td>
+              <td data-label="Status">${statusPill(tx)}</td>
+              <td data-label="Money put" class="num">${fmtMoney(tx.amount)}</td>
+              <td data-label="Total %" class="num"><span class="pct-pill">${fmtPct(tx.percent)}</span></td>
+              <td data-label="Profit" class="num profit-cell">${fmtMoney(Store.profitOf(tx))}</td>
+              <td data-label="Note" class="note-cell"><span class="note-text">${tx.note ? escapeHtml(tx.note) : '<span class="muted">—</span>'}</span></td>
+              <td data-label="Actions">
+                <div class="row-actions">
+                  <button class="link-btn" data-action="hist-edit" data-id="${tx.id}">Edit</button>
+                  <button class="link-btn danger" data-action="hist-delete" data-id="${tx.id}">Delete</button>
+                </div>
+              </td>
+            </tr>`
+            )
+            .join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 /* ============================================================
@@ -455,13 +584,14 @@ function bindEvents() {
   $('#tx-amount').addEventListener('input', updateProfitPreview);
   $('#tx-percent').addEventListener('input', updateProfitPreview);
   $('#tx-months').addEventListener('change', updateProfitPreview);
+  $('#tx-start').addEventListener('change', updateProfitPreview);
 
   // Add / edit transaction
   $('#tx-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const payload = {
       personId: $('#tx-person').value,
-      startMonth: $('#tx-start').value,
+      startDate: $('#tx-start').value,
       months: $('#tx-months').value,
       amount: $('#tx-amount').value,
       percent: $('#tx-percent').value,
@@ -522,6 +652,11 @@ function bindEvents() {
     const person = Store.personById(id);
     if (!person) return;
 
+    if (action === 'history-person') {
+      openHistory(id);
+      return;
+    }
+
     if (action === 'rename-person') {
       const name = prompt('New name:', person.name);
       if (name === null) return;
@@ -552,8 +687,31 @@ function bindEvents() {
   // Settings modal
   $('#open-settings').addEventListener('click', openSettings);
   $$('[data-close-modal]').forEach((el) => el.addEventListener('click', closeSettings));
+
+  // History modal
+  $$('[data-close-history]').forEach((el) => el.addEventListener('click', closeHistory));
+  $('#history-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const { action, id } = btn.dataset;
+    if (action === 'hist-edit') {
+      closeHistory();
+      startEdit(id);
+    }
+    if (action === 'hist-delete') {
+      if (confirm('Delete this transaction? This cannot be undone.')) {
+        Store.deleteTransaction(id);
+        renderAll();
+        renderHistory();
+        toast('Transaction deleted.');
+      }
+    }
+  });
+
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !$('#modal-settings').hidden) closeSettings();
+    if (e.key !== 'Escape') return;
+    if (!$('#modal-settings').hidden) closeSettings();
+    if (!$('#modal-history').hidden) closeHistory();
   });
 
   $('#set-currency').addEventListener('change', (e) => {

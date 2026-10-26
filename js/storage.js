@@ -1,17 +1,22 @@
 /* ============================================================
-   Al-shwareb — storage & calculation layer (v2)
+   Al-shwareb — storage & calculation layer (v3)
    All data is kept in the browser's localStorage.
 
    Transaction model:
-     startMonth  'YYYY-MM' — first calendar month of the deal
-     months      duration in months (1, 2, 3, …)
+     startDate   'YYYY-MM-DD' — exact day the deal starts
+     months      duration in whole months (1, 2, 3, …)
      amount      money put once
      percent     TOTAL profit percent over the whole period
-                 (per-month rate = percent / months)
+                 (average per-month rate = percent / months)
+
+   The deal is active on the half-open interval [startDate, endDate),
+   where endDate = startDate + months. Profit is spread by actual days,
+   so a deal starting just before month-end is prorated correctly.
    ============================================================ */
 
 const DB_KEY = 'alshwareb_db_v1';
 const MAX_MONTHS = 60;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const Store = {
   data: null,
@@ -28,16 +33,16 @@ const Store = {
     }
     if (!this.data || !Array.isArray(this.data.people) || !Array.isArray(this.data.transactions)) {
       this.data = {
-        meta: { version: 2, currency: 'EGP', createdAt: new Date().toISOString() },
+        meta: { version: 3, currency: 'EGP', createdAt: new Date().toISOString() },
         people: [],
         transactions: [],
       };
       this.save();
     }
-    if (!this.data.meta) this.data.meta = { version: 2, currency: 'EGP' };
+    if (!this.data.meta) this.data.meta = { version: 3, currency: 'EGP' };
     if (!this.data.meta.currency) this.data.meta.currency = 'EGP';
-    this.data.meta.version = 2;
-    // Migrate v1 records (single `period` month) to the startMonth + months model.
+    this.data.meta.version = 3;
+    // Migrate v1 (period month) and v2 (startMonth) records to exact dates.
     this.data.transactions = this.data.transactions.map((tx) => this.normalizeTx(tx));
     this.save();
     return this.data;
@@ -48,12 +53,19 @@ const Store = {
   },
 
   normalizeTx(tx) {
-    const startMonth = tx.startMonth || tx.period || currentMonthYM();
+    let startDate;
+    if (tx.startDate && DATE_RE.test(tx.startDate) && isValidDate(tx.startDate)) {
+      startDate = tx.startDate;
+    } else {
+      const ym = tx.startMonth || tx.period || currentMonthYM();
+      startDate = `${ym.slice(0, 7)}-01`;
+    }
     let months = parseInt(tx.months, 10);
     if (!isFinite(months) || months < 1) months = 1;
     if (months > MAX_MONTHS) months = MAX_MONTHS;
-    const copy = { ...tx, startMonth, months };
+    const copy = { ...tx, startDate, months };
     delete copy.period;
+    delete copy.startMonth;
     return copy;
   },
 
@@ -125,14 +137,16 @@ const Store = {
     if (personId && personId !== 'all') list = list.filter((t) => t.personId === personId);
     if (month && month !== 'all') list = list.filter((t) => this.isActiveInMonth(t, month));
     return [...list].sort((a, b) => {
-      if (a.startMonth !== b.startMonth) return b.startMonth.localeCompare(a.startMonth);
+      if (a.startDate !== b.startDate) return b.startDate.localeCompare(a.startDate);
       return b.createdAt.localeCompare(a.createdAt);
     });
   },
 
-  validateDeal({ personId, startMonth, months, amount, percent }) {
+  validateDeal({ personId, startDate, months, amount, percent }) {
     if (!this.personById(personId)) throw new Error('Please choose a person.');
-    if (!startMonth || !/^\d{4}-\d{2}$/.test(startMonth)) throw new Error('Please choose a start month.');
+    if (!startDate || !DATE_RE.test(startDate) || !isValidDate(startDate)) {
+      throw new Error('Please choose a valid start date.');
+    }
     months = parseInt(months, 10);
     if (!isFinite(months) || months < 1 || months > MAX_MONTHS) {
       throw new Error(`Period must be between 1 and ${MAX_MONTHS} months.`);
@@ -145,12 +159,12 @@ const Store = {
   },
 
   addTransaction(fields) {
-    const { personId, startMonth, note } = fields;
+    const { personId, startDate, note } = fields;
     const v = this.validateDeal(fields);
     const tx = {
       id: this.uid(),
       personId,
-      startMonth,
+      startDate,
       months: v.months,
       amount: v.amount,
       percent: v.percent,
@@ -167,14 +181,14 @@ const Store = {
     if (!tx) throw new Error('Transaction not found.');
     const merged = {
       personId: fields.personId !== undefined ? fields.personId : tx.personId,
-      startMonth: fields.startMonth !== undefined ? fields.startMonth : tx.startMonth,
+      startDate: fields.startDate !== undefined ? fields.startDate : tx.startDate,
       months: fields.months !== undefined ? fields.months : tx.months,
       amount: fields.amount !== undefined ? fields.amount : tx.amount,
       percent: fields.percent !== undefined ? fields.percent : tx.percent,
     };
     const v = this.validateDeal(merged);
     tx.personId = merged.personId;
-    tx.startMonth = merged.startMonth;
+    tx.startDate = merged.startDate;
     tx.months = v.months;
     tx.amount = v.amount;
     tx.percent = v.percent;
@@ -188,35 +202,69 @@ const Store = {
     this.save();
   },
 
-  /* ---------- period math ---------- */
+  /* ---------- date / period math ---------- */
 
-  endMonth(tx) {
-    return addMonthsYM(tx.startMonth, tx.months - 1);
+  // Maturity date = start date + N whole months (clamped to month length).
+  endDate(tx) {
+    return addMonthsISO(tx.startDate, tx.months);
   },
 
-  monthRange(tx) {
-    const out = [];
-    for (let i = 0; i < tx.months; i++) out.push(addMonthsYM(tx.startMonth, i));
-    return out;
+  periodDays(tx) {
+    return daysBetween(tx.startDate, this.endDate(tx));
+  },
+
+  // Every calendar month the deal touches, with the active days in each.
+  monthSlices(tx) {
+    const end = this.endDate(tx);
+    const slices = [];
+    let cursor = tx.startDate;
+    while (cursor < end) {
+      const ym = cursor.slice(0, 7);
+      const nextMonth = firstOfNextMonth(ym);
+      const sliceEnd = nextMonth < end ? nextMonth : end;
+      slices.push({
+        ym,
+        days: daysBetween(cursor, sliceEnd),
+        from: cursor,
+        to: addDaysISO(sliceEnd, -1),
+      });
+      cursor = sliceEnd;
+    }
+    return slices;
   },
 
   isActiveInMonth(tx, ym) {
-    return tx.startMonth <= ym && ym <= this.endMonth(tx);
+    return tx.startDate < firstOfNextMonth(ym) && this.endDate(tx) > `${ym}-01`;
   },
 
-  // Total percent spread evenly over the period, e.g. 10% over 5 months -> 2% / month
-  monthlyRateOf(tx) {
-    return round2((Number(tx.percent) || 0) / tx.months);
+  // 'upcoming' | 'active' | 'ended', relative to a given day (default today).
+  statusOf(tx, asOf = todayISO()) {
+    const end = this.endDate(tx);
+    if (tx.startDate > asOf) return 'upcoming';
+    if (end <= asOf) return 'ended';
+    return 'active';
   },
+
+  /* ---------- profit math ---------- */
 
   // Total profit over the whole period = money put × total percent ÷ 100
   profitOf(tx) {
     return round2((Number(tx.amount) || 0) * (Number(tx.percent) || 0) / 100);
   },
 
-  // Profit earned in each single month of the period
-  monthlyProfitOf(tx) {
+  // Average per-month rate, e.g. 10% over 5 months -> 2% / month
+  monthlyRateOf(tx) {
+    return round2((Number(tx.percent) || 0) / tx.months);
+  },
+
+  // Average profit per whole month of the period
+  avgMonthlyProfitOf(tx) {
     return round2(this.profitOf(tx) / tx.months);
+  },
+
+  dailyProfitOf(tx) {
+    const days = this.periodDays(tx);
+    return days > 0 ? this.profitOf(tx) / days : 0;
   },
 
   /* ---------- calculations ---------- */
@@ -238,26 +286,36 @@ const Store = {
       profit,
       returned: round2(invested + profit),
       monthCount,
-      // Overall percent = total profit ÷ total money put (each deal's full-period %)
       percent: invested > 0 ? round2((profit / invested) * 100) : 0,
       avgMonthlyProfit: monthCount > 0 ? round2(profit / monthCount) : 0,
     };
   },
 
-  // Expands every transaction onto its calendar months.
-  // In a given month: "money at work" = amounts of deals active that month,
-  // profit = each deal's per-month profit, rate = profit ÷ money at work.
+  // Expands every transaction onto its calendar months using day proration.
+  // Per month: "money at work" = principal of every deal active that month,
+  // profit = each deal's daily profit × active days in that month. Allocation
+  // of the final slice is corrected so monthly parts sum to the exact total.
   monthlyBreakdown(list) {
     const map = new Map();
     for (const tx of list) {
-      const perMonth = this.monthlyProfitOf(tx);
-      for (const ym of this.monthRange(tx)) {
-        if (!map.has(ym)) map.set(ym, { period: ym, invested: 0, profit: 0, count: 0 });
-        const row = map.get(ym);
+      const slices = this.monthSlices(tx);
+      const total = this.profitOf(tx);
+      const daily = this.dailyProfitOf(tx);
+      let allocated = 0;
+      slices.forEach((slice, i) => {
+        let part;
+        if (i === slices.length - 1) {
+          part = round2(total - allocated); // absorb rounding remainder
+        } else {
+          part = round2(daily * slice.days);
+          allocated += part;
+        }
+        if (!map.has(slice.ym)) map.set(slice.ym, { period: slice.ym, invested: 0, profit: 0, count: 0 });
+        const row = map.get(slice.ym);
         row.invested += Number(tx.amount) || 0;
-        row.profit += perMonth;
+        row.profit += part;
         row.count += 1;
-      }
+      });
     }
     return [...map.values()]
       .map((r) => ({
@@ -269,11 +327,11 @@ const Store = {
       .sort((a, b) => b.period.localeCompare(a.period));
   },
 
-  // Every calendar month touched by any transaction (including spanned months)
+  // Every calendar month touched by any transaction (including partial months)
   allMonths() {
     const set = new Set();
     for (const tx of this.data.transactions) {
-      for (const ym of this.monthRange(tx)) set.add(ym);
+      for (const slice of this.monthSlices(tx)) set.add(slice.ym);
     }
     return [...set].sort().reverse();
   },
@@ -295,7 +353,7 @@ const Store = {
       throw new Error('The file does not look like an Al-shwareb backup.');
     }
     this.data = {
-      meta: { version: 2, currency: obj.meta.currency || 'EGP', createdAt: obj.meta.createdAt || new Date().toISOString() },
+      meta: { version: 3, currency: obj.meta.currency || 'EGP', createdAt: obj.meta.createdAt || new Date().toISOString() },
       people: obj.people,
       transactions: obj.transactions.map((tx) => this.normalizeTx(tx)),
     };
@@ -304,7 +362,7 @@ const Store = {
 
   eraseAll() {
     this.data = {
-      meta: { version: 2, currency: this.currency, createdAt: new Date().toISOString() },
+      meta: { version: 3, currency: this.currency, createdAt: new Date().toISOString() },
       people: [],
       transactions: [],
     };
@@ -312,28 +370,31 @@ const Store = {
   },
 
   loadSampleData() {
-    const people = [
-      { id: this.uid(), name: 'Ahmed', createdAt: new Date().toISOString() },
-      { id: this.uid(), name: 'Mona', createdAt: new Date().toISOString() },
-      { id: this.uid(), name: 'Karim', createdAt: new Date().toISOString() },
-    ];
-    // startMonth offsets from today, duration in months, total percent over the period
+    // Reuse existing people with the same name instead of creating duplicates.
+    const names = ['Ahmed', 'Mona', 'Karim'];
+    const people = names.map((name) => {
+      const existing = this.data.people.find((p) => p.name.toLowerCase() === name.toLowerCase());
+      return existing || { id: this.uid(), name, createdAt: new Date().toISOString() };
+    });
+    const created = people.filter((p) => !this.data.people.includes(p));
+    this.data.people.push(...created);
+    const today = todayISO();
+    // start offsets in days (mixed day-of-month to show proration), months, amount, total %
     const rows = [
-      [people[0].id, 0, 3, 5000, 10, 'Electronics order — 10% over 3 months'],
-      [people[1].id, 0, 2, 3000, 12, 'Clothes shipment — 12% over 2 months'],
-      [people[2].id, 0, 5, 2500, 10, 'Accessories — 10% over 5 months (2% per month)'],
-      [people[0].id, 1, 4, 4500, 11, 'Restock — phones'],
-      [people[1].id, 1, 1, 2000, 9, 'Market stall goods'],
-      [people[2].id, 2, 6, 6000, 12, 'Wholesale deal'],
-      [people[0].id, 2, 2, 3500, 7, 'Seasonal items'],
-      [people[1].id, 3, 3, 4200, 12, 'Online sales batch'],
+      [people[0].id, -2, 3, 5000, 10, 'Electronics order — 10% over 3 months'],
+      [people[1].id, -5, 2, 3000, 12, 'Clothes shipment — 12% over 2 months'],
+      [people[2].id, -9, 5, 2500, 10, 'Accessories — 10% over 5 months (2% per month avg)'],
+      [people[0].id, -34, 4, 4500, 11, 'Restock — phones'],
+      [people[1].id, -40, 1, 2000, 9, 'Market stall goods'],
+      [people[2].id, -65, 6, 6000, 12, 'Wholesale deal'],
+      [people[0].id, -70, 2, 3500, 7, 'Seasonal items'],
+      [people[1].id, -95, 3, 4200, 12, 'Online sales batch'],
     ];
-    this.data.people.push(...people);
     for (const [personId, offset, months, amount, percent, note] of rows) {
       this.data.transactions.push({
         id: this.uid(),
         personId,
-        startMonth: addMonthsYM(currentMonthYM(), -offset),
+        startDate: addDaysISO(today, offset),
         months,
         amount,
         percent,
@@ -345,7 +406,11 @@ const Store = {
   },
 };
 
-/* ---------- module-level utilities ---------- */
+/* ---------- module-level date utilities ---------- */
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
 
 function round2(n) {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -353,11 +418,45 @@ function round2(n) {
 
 function currentMonthYM() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 }
 
-function addMonthsYM(ym, n) {
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function isValidDate(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  return !isNaN(d.getTime()) && toISODate(d) === iso;
+}
+
+function toISODate(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+// Add whole months, clamping the day to the target month's length
+// (e.g. Jan 31 + 1 month -> Feb 28/29).
+function addMonthsISO(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const total = (m - 1) + n;
+  const targetYear = y + Math.floor(total / 12);
+  const targetMonth = ((total % 12) + 12) % 12;
+  const daysInTarget = new Date(targetYear, targetMonth + 1, 0).getDate();
+  return `${targetYear}-${pad2(targetMonth + 1)}-${pad2(Math.min(d, daysInTarget))}`;
+}
+
+function addDaysISO(iso, n) {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return toISODate(d);
+}
+
+function daysBetween(a, b) {
+  return Math.round((Date.parse(`${b}T00:00:00`) - Date.parse(`${a}T00:00:00`)) / 86400000);
+}
+
+function firstOfNextMonth(ym) {
   const [y, m] = ym.split('-').map(Number);
-  const d = new Date(y, m - 1 + n, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return addMonthsISO(`${y}-${pad2(m)}-01`, 1);
 }
