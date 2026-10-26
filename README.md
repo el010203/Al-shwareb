@@ -8,11 +8,15 @@ percent on each transaction, and see total profit plus month-by-month profit.
 
 - **People, not accounts** — add as many people as you need; each gets their own
   transactions and profit totals. No passwords.
-- **Transactions** — person, month period, money put, profit percent, and a free-text
+- **Transactions** — person, start month, period duration (1 month, 2 months, …),
+  money put, **total** profit percent over the whole period, and a free-text
   documentation note. Profit is calculated automatically:
-  `profit = money put × percent ÷ 100`.
+  `total profit = money put × total percent ÷ 100`, and the percent is spread evenly
+  across the period — e.g. **10% over 5 months = 2% per month**.
 - **Dashboard** — total money invested, **total profit in money**, **overall percent
-  profit**, a monthly profit chart, and a full monthly breakdown table.
+  profit**, average profit per month, a monthly profit chart, and a full monthly
+  breakdown. Multi-month deals are spread across their actual calendar months, so each
+  month shows its own profit and the money at work in that month.
 - **Filters** — view everything or narrow down by person and/or month.
 - **Edit & delete** any transaction or person.
 - **Backup / restore** — all data lives in your browser; export a `.json` backup file

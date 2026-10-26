@@ -69,19 +69,24 @@
               <select id="tx-person" class="select" required></select>
             </div>
             <div class="field">
-              <label for="tx-period">Period (month) *</label>
-              <input type="month" id="tx-period" class="input" required />
+              <label for="tx-start">Start month *</label>
+              <input type="month" id="tx-start" class="input" required />
+            </div>
+            <div class="field">
+              <label for="tx-months">Period *</label>
+              <select id="tx-months" class="select" required></select>
             </div>
             <div class="field">
               <label for="tx-amount">Money put *</label>
               <input type="number" id="tx-amount" class="input" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required />
             </div>
             <div class="field">
-              <label for="tx-percent">Profit percent *</label>
+              <label for="tx-percent">Total profit percent *</label>
               <div class="input-suffix">
                 <input type="number" id="tx-percent" class="input" min="0" step="0.01" inputmode="decimal" placeholder="0" required />
                 <span>%</span>
               </div>
+              <p class="hint" id="tx-rate-hint">Percent covers the whole period.</p>
             </div>
             <div class="field field-full">
               <label for="tx-note">Documentation note</label>

@@ -109,7 +109,7 @@ function renderDashboard() {
     <div class="card">
       <div class="label">Money invested</div>
       <div class="value">${fmtMoney(summary.invested)}</div>
-      <div class="sub">${summary.count} transaction${summary.count === 1 ? '' : 's'}</div>
+      <div class="sub">${summary.count} transaction${summary.count === 1 ? '' : 's'} · ${summary.monthCount} deal-month${summary.monthCount === 1 ? '' : 's'}</div>
     </div>
     <div class="card profit">
       <div class="label">Total profit</div>
@@ -119,7 +119,7 @@ function renderDashboard() {
     <div class="card">
       <div class="label">Percent profit</div>
       <div class="value">${fmtPct(summary.percent)}</div>
-      <div class="sub">Total profit ÷ money invested</div>
+      <div class="sub">Avg. ${fmtMoney(summary.avgMonthlyProfit)} profit per month</div>
     </div>
     <div class="card">
       <div class="label">Best month</div>
@@ -174,10 +174,10 @@ function renderMonthlyTable(monthly) {
         <thead>
           <tr>
             <th>Month</th>
-            <th class="num">Transactions</th>
-            <th class="num">Money invested</th>
-            <th class="num">Profit (money)</th>
-            <th class="num">Profit (%)</th>
+            <th class="num">Active deals</th>
+            <th class="num">Money at work</th>
+            <th class="num">Month profit</th>
+            <th class="num">Month rate</th>
           </tr>
         </thead>
         <tbody>
@@ -186,10 +186,10 @@ function renderMonthlyTable(monthly) {
               (r) => `
             <tr>
               <td data-label="Month"><strong>${escapeHtml(formatMonth(r.period))}</strong></td>
-              <td data-label="Transactions" class="num">${r.count}</td>
-              <td data-label="Money invested" class="num">${fmtMoney(r.invested)}</td>
-              <td data-label="Profit (money)" class="num profit-cell">${fmtMoney(r.profit)}</td>
-              <td data-label="Profit (%)" class="num"><span class="pct-pill">${fmtPct(r.percent)}</span></td>
+              <td data-label="Active deals" class="num">${r.count}</td>
+              <td data-label="Money at work" class="num">${fmtMoney(r.invested)}</td>
+              <td data-label="Month profit" class="num profit-cell">${fmtMoney(r.profit)}</td>
+              <td data-label="Month rate" class="num"><span class="pct-pill">${fmtPct(r.percent)}</span></td>
             </tr>`
             )
             .join('')}
@@ -239,8 +239,9 @@ function renderTransactionList() {
               <th>Period</th>
               ${showPerson ? '<th>Person</th>' : ''}
               <th class="num">Money put</th>
-              <th class="num">%</th>
-              <th class="num">Profit</th>
+              <th class="num">Total %</th>
+              <th class="num">Per month</th>
+              <th class="num">Total profit</th>
               <th>Note</th>
               <th></th>
             </tr>
@@ -249,13 +250,22 @@ function renderTransactionList() {
             ${txs
               .map((tx) => {
                 const profit = Store.profitOf(tx);
+                const perMonthRate = Store.monthlyRateOf(tx);
+                const perMonthProfit = Store.monthlyProfitOf(tx);
                 return `
               <tr>
-                <td data-label="Period">${escapeHtml(formatMonth(tx.period))}</td>
+                <td data-label="Period">
+                  <strong>${formatPeriod(tx)}</strong>
+                  <div class="muted" style="font-size:0.78rem">${tx.months} month${tx.months === 1 ? '' : 's'}</div>
+                </td>
                 ${showPerson ? `<td data-label="Person"><span class="person-chip">${escapeHtml(Store.personName(tx.personId))}</span></td>` : ''}
                 <td data-label="Money put" class="num">${fmtMoney(tx.amount)}</td>
-                <td data-label="Percent" class="num"><span class="pct-pill">${fmtPct(tx.percent)}</span></td>
-                <td data-label="Profit" class="num profit-cell">${fmtMoney(profit)}</td>
+                <td data-label="Total %" class="num"><span class="pct-pill">${fmtPct(tx.percent)}</span></td>
+                <td data-label="Per month" class="num">
+                  <strong>${fmtPct(perMonthRate)}</strong>
+                  <div class="muted" style="font-size:0.78rem">${fmtMoney(perMonthProfit)}/mo</div>
+                </td>
+                <td data-label="Total profit" class="num profit-cell">${fmtMoney(profit)}</td>
                 <td data-label="Note" class="note-cell"><span class="note-text">${tx.note ? escapeHtml(tx.note) : '<span class="muted">—</span>'}</span></td>
                 <td data-label="Actions">
                   <div class="row-actions">
@@ -272,20 +282,39 @@ function renderTransactionList() {
     </div>`;
 }
 
+function fillMonthsSelect() {
+  const sel = $('#tx-months');
+  sel.innerHTML = Array.from({ length: 60 }, (_, i) => {
+    const n = i + 1;
+    return `<option value="${n}">${n} month${n === 1 ? '' : 's'}</option>`;
+  }).join('');
+}
+
 function updateProfitPreview() {
   const amount = Number($('#tx-amount').value) || 0;
-  const percent = Number($('#tx-percent').value) || 0;
-  const profit = Math.round(amount * percent * 100) / 10000; // amount * percent / 100, rounded
-  const rounded = Math.round((profit + Number.EPSILON) * 100) / 100;
-  $('#tx-preview-profit').textContent = fmtMoney(rounded);
-  $('#tx-preview-return').textContent = amount > 0 ? `(total returned: ${fmtMoney(amount + rounded)})` : '';
+  const totalPercent = Number($('#tx-percent').value) || 0;
+  const months = Number($('#tx-months').value) || 1;
+  const totalProfit = round2((amount * totalPercent) / 100);
+  const perMonthRate = round2(totalPercent / months);
+  const perMonthProfit = round2(totalProfit / months);
+
+  $('#tx-preview-profit').textContent = fmtMoney(totalProfit);
+  $('#tx-preview-return').textContent =
+    amount > 0
+      ? `(total returned: ${fmtMoney(amount + totalProfit)})`
+      : '';
+  $('#tx-rate-hint').textContent =
+    months > 1
+      ? `${fmtPct(totalPercent)} over ${months} months = ${fmtPct(perMonthRate)} per month · ${fmtMoney(perMonthProfit)}/month`
+      : 'Percent covers the whole period.';
 }
 
 function resetTxForm() {
   state.editingId = null;
   $('#tx-form').reset();
   $('#tx-id').value = '';
-  $('#tx-period').value = currentMonth();
+  $('#tx-start').value = currentMonth();
+  $('#tx-months').value = '1';
   $('#tx-form-title').textContent = 'Add transaction';
   $('#tx-submit').textContent = 'Add transaction';
   $('#tx-cancel').hidden = true;
@@ -298,7 +327,8 @@ function startEdit(id) {
   state.editingId = id;
   $('#tx-id').value = id;
   $('#tx-person').value = tx.personId;
-  $('#tx-period').value = tx.period;
+  $('#tx-start').value = tx.startMonth;
+  $('#tx-months').value = String(tx.months);
   $('#tx-amount').value = tx.amount;
   $('#tx-percent').value = tx.percent;
   $('#tx-note').value = tx.note;
@@ -308,6 +338,12 @@ function startEdit(id) {
   updateProfitPreview();
   switchTab('transactions');
   $('.form-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function formatPeriod(tx) {
+  const start = formatMonth(tx.startMonth);
+  if (tx.months === 1) return escapeHtml(start);
+  return `${escapeHtml(start)} → ${escapeHtml(formatMonth(Store.endMonth(tx)))}`;
 }
 
 /* ============================================================
@@ -418,13 +454,15 @@ function bindEvents() {
   // Live profit preview
   $('#tx-amount').addEventListener('input', updateProfitPreview);
   $('#tx-percent').addEventListener('input', updateProfitPreview);
+  $('#tx-months').addEventListener('change', updateProfitPreview);
 
   // Add / edit transaction
   $('#tx-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const payload = {
       personId: $('#tx-person').value,
-      period: $('#tx-period').value,
+      startMonth: $('#tx-start').value,
+      months: $('#tx-months').value,
       amount: $('#tx-amount').value,
       percent: $('#tx-percent').value,
       note: $('#tx-note').value,
@@ -575,6 +613,7 @@ function bindEvents() {
 
 document.addEventListener('DOMContentLoaded', () => {
   Store.load();
+  fillMonthsSelect();
   bindEvents();
   resetTxForm();
   renderAll();
