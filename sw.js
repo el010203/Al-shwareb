@@ -2,9 +2,16 @@
    Al-shwareb service worker — offline support (PWA)
    Bump CACHE_VERSION whenever app files change so devices
    pick up the new version.
+
+   Strategy:
+   - Page navigations  -> network-first, cached shell as offline
+     fallback. A reload must never get stuck serving a broken or
+     missing cached page when the network is available.
+   - Static assets      -> cache-first, network fallback, and every
+     successful network response is cached for future offline use.
    ============================================================ */
 
-const CACHE_VERSION = 'al-shwareb-v6';
+const CACHE_VERSION = 'al-shwareb-v7';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -23,16 +30,16 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_VERSION);
-      // Cache each file independently: one missing/failed file must
-      // never abort the whole install (addAll is all-or-nothing).
+      // Cache each file independently: one failed download must not
+      // abort the whole install (cache.addAll is all-or-nothing).
       const results = await Promise.allSettled(
         CORE_ASSETS.map((url) => cache.add(url))
       );
       const failed = results.filter((r) => r.status === 'rejected').length;
       if (failed) console.warn(`Al-shwareb SW: ${failed} asset(s) failed to precache`);
 
-      // Make sure the app shell is available under both URL spellings,
-      // because Android may launch '/' or '/index.html'.
+      // Ensure the app shell exists under both URL spellings, because
+      // Android may launch '/' or '/index.html'.
       const shell = await cache.match('./index.html');
       if (shell) await cache.put('./', shell.clone());
     })().then(() => self.skipWaiting())
@@ -56,28 +63,47 @@ async function appShellFallback() {
   );
 }
 
-// Cache-first for GET requests, falling back to the network and
-// caching successful responses so newly visited files work offline too.
+function cacheResponse(request, response) {
+  if (!response.ok) return;
+  const copy = response.clone();
+  caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return; // cross-origin goes straight to network
+
+  // ---- Navigations: network-first so reloads behave like a normal website ----
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          cacheResponse(request, response);
+          return response;
+        })
+        .catch(() =>
+          // Offline (or network blocked): use the cached page if we have one.
+          caches
+            .match(request)
+            .then((cached) => cached || appShellFallback())
+        )
+    );
+    return;
+  }
+
+  // ---- Static assets: cache-first, then network, runtime-cache the result ----
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
       return fetch(request)
         .then((response) => {
-          if (response.ok && new URL(request.url).origin === self.location.origin) {
-            const copy = response.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
-          }
+          cacheResponse(request, response);
           return response;
         })
-        .catch(() => {
-          // Offline: any navigation falls back to the cached app shell.
-          if (request.mode === 'navigate') return appShellFallback();
-          return Response.error();
-        });
+        .catch(() => Response.error());
     })
   );
 });

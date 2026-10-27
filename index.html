@@ -213,7 +213,11 @@
     // Enable offline use / installability. Ignored on browsers without SW support.
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch((err) => console.warn('SW registration failed:', err));
+        // updateViaCache:'none' forces the browser to always revalidate sw.js,
+        // so a fixed worker can never be stuck behind an HTTP-cached old one.
+        navigator.serviceWorker
+          .register('sw.js', { updateViaCache: 'none' })
+          .catch((err) => console.warn('SW registration failed:', err));
       });
     }
   </script>
