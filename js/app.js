@@ -497,7 +497,7 @@ function showOfflineBanner() {
   banner.hidden = false;
   // Informational only — auto-dismiss so it never lingers on screen.
   clearTimeout(offlineBannerTimer);
-  offlineBannerTimer = setTimeout(hideOfflineBanner, 5000);
+  offlineBannerTimer = setTimeout(hideOfflineBanner, 4000);
 }
 
 function updateOfflineBanner() {

@@ -532,44 +532,56 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
   border-color: rgba(242, 182, 92, 0.3);
 }
 
-/* ============ Offline banner ============ */
+/* ============ Offline banner (small bottom toast) ============ */
 .offline-banner {
   position: fixed;
-  top: calc(8px + env(safe-area-inset-top));
+  bottom: calc(78px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   z-index: 120;
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: rgba(242, 182, 92, 0.16);
+  gap: 8px;
+  background: rgba(28, 35, 31, 0.96);
   color: var(--gold);
-  border: 1px solid rgba(242, 182, 92, 0.4);
+  border: 1px solid rgba(242, 182, 92, 0.35);
   border-radius: 999px;
-  padding: 7px 8px 7px 16px;
-  font-size: 0.8rem;
+  padding: 7px 8px 7px 13px;
+  font-size: 0.78rem;
   font-weight: 600;
   max-width: 92vw;
-  text-align: center;
   box-shadow: var(--shadow);
   animation: toast-in 0.2s ease;
 }
 .offline-banner[hidden] { display: none; }
+.offline-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.offline-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 8px rgba(242, 182, 92, 0.8);
+}
 .offline-banner-x {
   flex: none;
-  background: rgba(242, 182, 92, 0.18);
+  background: rgba(242, 182, 92, 0.16);
   border: none;
   color: inherit;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  font-size: 1rem;
+  font-size: 0.95rem;
   line-height: 1;
   cursor: pointer;
   display: grid;
   place-items: center;
 }
-.offline-banner-x:hover { background: rgba(242, 182, 92, 0.32); }
+.offline-banner-x:hover { background: rgba(242, 182, 92, 0.3); }
 
 /* ============ Toast ============ */
 .toast {
