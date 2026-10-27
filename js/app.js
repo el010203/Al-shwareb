@@ -483,9 +483,26 @@ async function requestPersistentStorage() {
   }
 }
 
-function updateOfflineBanner() {
+let offlineBannerTimer = null;
+
+function hideOfflineBanner() {
   const banner = $('#offline-banner');
-  if (banner) banner.hidden = navigator.onLine !== false;
+  if (banner) banner.hidden = true;
+  clearTimeout(offlineBannerTimer);
+}
+
+function showOfflineBanner() {
+  const banner = $('#offline-banner');
+  if (!banner) return;
+  banner.hidden = false;
+  // Informational only — auto-dismiss so it never lingers on screen.
+  clearTimeout(offlineBannerTimer);
+  offlineBannerTimer = setTimeout(hideOfflineBanner, 5000);
+}
+
+function updateOfflineBanner() {
+  if (navigator.onLine === false) showOfflineBanner();
+  else hideOfflineBanner();
 }
 
 function closeSettings() {
@@ -820,4 +837,9 @@ document.addEventListener('DOMContentLoaded', () => {
   updateOfflineBanner();
   window.addEventListener('online', updateOfflineBanner);
   window.addEventListener('offline', updateOfflineBanner);
+  // Re-check when the user returns to the app (some devices miss the 'online' event).
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) updateOfflineBanner();
+  });
+  $('#offline-banner-close').addEventListener('click', hideOfflineBanner);
 });

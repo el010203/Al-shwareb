@@ -539,11 +539,14 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
   left: 50%;
   transform: translateX(-50%);
   z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   background: rgba(242, 182, 92, 0.16);
   color: var(--gold);
   border: 1px solid rgba(242, 182, 92, 0.4);
   border-radius: 999px;
-  padding: 7px 16px;
+  padding: 7px 8px 7px 16px;
   font-size: 0.8rem;
   font-weight: 600;
   max-width: 92vw;
@@ -551,6 +554,22 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
   box-shadow: var(--shadow);
   animation: toast-in 0.2s ease;
 }
+.offline-banner[hidden] { display: none; }
+.offline-banner-x {
+  flex: none;
+  background: rgba(242, 182, 92, 0.18);
+  border: none;
+  color: inherit;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.offline-banner-x:hover { background: rgba(242, 182, 92, 0.32); }
 
 /* ============ Toast ============ */
 .toast {
