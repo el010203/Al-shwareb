@@ -76,9 +76,12 @@ Alternative without the command line: in the Cloudflare dashboard go to
 **Workers & Pages → Create → Workers → upload static assets** and drag in this
 folder (or a ZIP of it).
 
-> Note: data still lives only on each device's browser storage. The service worker
-> caches the app itself for offline use; keep using **Settings → Export backup** to
-> safeguard or move your transactions.
+> Note: data still lives only on each device's browser storage (`localStorage`) — there
+> is no online database and no data ever leaves the device. The service worker caches
+> the app itself for offline use: open the URL once while online, install it, and it
+> afterwards launches with no internet. The app also requests persistent storage so the
+> browser won't auto-clear the data; **Settings** shows the protection status. Keep using
+> **Settings → Export backup** to safeguard or move your transactions anyway.
 
 ## How your data is stored
 

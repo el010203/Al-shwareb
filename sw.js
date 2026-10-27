@@ -4,7 +4,7 @@
    pick up the new version.
    ============================================================ */
 
-const CACHE_VERSION = 'al-shwareb-v3';
+const CACHE_VERSION = 'al-shwareb-v4';
 const CORE_ASSETS = [
   './',
   './index.html',

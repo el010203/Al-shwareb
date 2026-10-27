@@ -445,6 +445,42 @@ function openSettings() {
   const count = Store.data.transactions.length;
   $('#storage-note').textContent = `Currently stored on this device: ${Store.data.people.length} people, ${count} transaction${count === 1 ? '' : 's'}.`;
   $('#modal-settings').hidden = false;
+  renderStorageStatus();
+}
+
+// Shows where data lives and asks the browser to protect it from auto-eviction.
+async function renderStorageStatus() {
+  const host = $('#storage-status');
+  if (!host) return;
+  let persistent = false;
+  let supported = false;
+  try {
+    if (navigator.storage && navigator.storage.persisted) {
+      supported = true;
+      persistent = await navigator.storage.persisted();
+      if (!persistent && navigator.storage.persist) {
+        persistent = await navigator.storage.persist();
+      }
+    }
+  } catch {
+    supported = false;
+  }
+  host.innerHTML =
+    `<span class="offline-dot"></span>` +
+    `Data is saved <strong>only on this device</strong> and the app works fully offline — no account and no online database.` +
+    (supported
+      ? persistent
+        ? ` Storage protection: <strong>on</strong> (the browser won't auto-clear it).`
+        : ` Storage protection: <strong>off</strong> — keep using Export backup to be safe.`
+      : ` Keep using Export backup to be safe.`);
+}
+
+async function requestPersistentStorage() {
+  try {
+    if (navigator.storage && navigator.storage.persist) await navigator.storage.persist();
+  } catch {
+    /* unsupported or denied — harmless, backups still available */
+  }
 }
 
 function closeSettings() {
@@ -775,4 +811,5 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   resetTxForm();
   renderAll();
+  requestPersistentStorage();
 });

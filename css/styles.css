@@ -423,6 +423,22 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
 .person-actions { display: flex; gap: 6px; }
 
 .hint { font-size: 0.82rem; color: var(--muted); margin: 8px 0 0; }
+.storage-status {
+  background: var(--input-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+.offline-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-right: 7px;
+  box-shadow: 0 0 8px rgba(46, 204, 150, 0.7);
+}
 .divider { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
 
 /* ============ Modal ============ */
