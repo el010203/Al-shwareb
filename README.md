@@ -54,27 +54,58 @@ Once it is opened over an `https://` URL (for example the Cloudflare URL below):
 It then opens full-screen with its own icon, works offline, and respects iPad
 safe areas (notch / home indicator). On-screen keyboards no longer zoom the page.
 
-## Deploy to Cloudflare Workers
+## Deploy to Cloudflare
 
-This repo includes `wrangler.toml` configured for **Workers Static Assets**, so no
-server code is needed.
+This is a plain static site, so it runs on either Cloudflare product. **Pages is
+recommended** — it matches the other apps in your Cloudflare dashboard, connects to
+the GitHub repo and redeploys automatically on every push, and uses a `*.pages.dev`
+URL (which is also less likely to be blocked by mobile networks than `workers.dev`).
 
-1. Create a free Cloudflare account and note your `*.workers.dev` subdomain
-   (Workers & Pages → choose/set a subdomain).
-2. From the project folder on your computer:
+### Option A — Cloudflare Pages connected to GitHub (recommended)
+
+1. Cloudflare dashboard → **Workers & Pages → Create → Pages → Connect to Git**.
+2. Pick the **`el010203/Al-shwareb`** GitHub repository and authorize it.
+3. Set the **production branch to `arena/9caf2b8f-al-shwareb`** (the `main` branch
+   only contains the initial README; the app lives on this branch).
+4. Build settings — no build step is needed:
+   - Framework preset: **None**
+   - Build command: leave **empty**
+   - Build output directory: **`/`** (the repository root, where `index.html` is)
+5. Click **Save and Deploy**. The app goes live at
+   `https://<project-name>.pages.dev` (you can rename the project on the first screen).
+
+After that, every `git push` to the branch publishes a new deployment automatically —
+no more manual deploy commands. Preview URLs per branch are also created for free.
+
+### Option B — Pages from the command line (no GitHub connection)
+
+```bash
+npx wrangler login
+npx wrangler pages deploy . --project-name=al-shwareb
+```
+
+The first run creates the Pages project; each later run uploads a new deployment and
+prints the `*.pages.dev` URL.
+
+### Option C — Workers Static Assets (the original setup)
+
+`wrangler.toml` is included for this route:
 
 ```bash
 npx wrangler login
 npx wrangler deploy
 ```
 
-The app goes live at `https://al-shwareb.<your-subdomain>.workers.dev` — open that
-URL on the iPad and use *Add to Home Screen*. Every `wrangler deploy` after a
-`git pull` publishes the newest version.
+This produces the `*.workers.dev` URL and appears as a **Worker** (different icon and
+no repo badge) rather than a Pages project.
 
-Alternative without the command line: in the Cloudflare dashboard go to
-**Workers & Pages → Create → Workers → upload static assets** and drag in this
-folder (or a ZIP of it).
+### Switching from workers.dev to pages.dev
+
+The two URLs are different browser origins, so local data does not carry over
+automatically. Before removing the old Worker: open the old URL →
+**Settings → Export backup**, then open the new pages.dev URL →
+**Settings → Import backup**. Reinstall the home-screen app from the new URL and
+delete the old icon. The old Worker can then be deleted from the dashboard.
 
 > Note: data still lives only on each device's browser storage (`localStorage`) — there
 > is no online database and no data ever leaves the device. The service worker caches
@@ -97,9 +128,10 @@ folder (or a ZIP of it).
 3. Remove the installed home-screen icon, open the website once in the browser, then
    **Add to Home Screen / Install** again.
 4. Some mobile networks block `*.workers.dev`. Try the other network (Wi‑Fi vs mobile
-   data). A permanent fix is connecting your own domain to the Worker in the Cloudflare
-   dashboard (Workers → your Worker → Settings → Domains & Routes), which bypasses
-   workers.dev entirely.
+   data). Two permanent fixes: deploy the same files as a **Cloudflare Pages** project
+   (see "Option A" above) to get a `*.pages.dev` URL, or connect your own domain to the
+   Worker in the Cloudflare dashboard (Workers → your Worker → Settings →
+   Domains & Routes), which bypasses workers.dev entirely.
 5. When offline and working, an amber **"You're offline"** banner appears inside the
    app. If you instead see a browser error page, the service worker wasn't installed —
    repeat steps 1–3.
