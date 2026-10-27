@@ -83,6 +83,27 @@ folder (or a ZIP of it).
 > browser won't auto-clear the data; **Settings** shows the protection status. Keep using
 > **Settings → Export backup** to safeguard or move your transactions anyway.
 
+## Troubleshooting
+
+**Installed app shows "This site can't be reached / ERR_FAILED" (Android or iPad).**
+
+1. The device must open the URL **once while online** and stay connected for ~20
+   seconds so the service worker can finish caching. Re-open the page in a normal
+   browser tab first; it should load normally.
+2. Verify the deployment is complete by opening these directly (each must load):
+   `https://YOUR-URL.workers.dev/sw.js` and
+   `https://YOUR-URL.workers.dev/icons/icon-192.png`. A 404 means files were missing
+   from the upload — redeploy with `npx wrangler deploy` from the full project folder.
+3. Remove the installed home-screen icon, open the website once in the browser, then
+   **Add to Home Screen / Install** again.
+4. Some mobile networks block `*.workers.dev`. Try the other network (Wi‑Fi vs mobile
+   data). A permanent fix is connecting your own domain to the Worker in the Cloudflare
+   dashboard (Workers → your Worker → Settings → Domains & Routes), which bypasses
+   workers.dev entirely.
+5. When offline and working, an amber **"You're offline"** banner appears inside the
+   app. If you instead see a browser error page, the service worker wasn't installed —
+   repeat steps 1–3.
+
 ## How your data is stored
 
 Everything is saved in the browser's `localStorage` on **this device and this

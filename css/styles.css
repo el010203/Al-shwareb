@@ -532,6 +532,26 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
   border-color: rgba(242, 182, 92, 0.3);
 }
 
+/* ============ Offline banner ============ */
+.offline-banner {
+  position: fixed;
+  top: calc(8px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 120;
+  background: rgba(242, 182, 92, 0.16);
+  color: var(--gold);
+  border: 1px solid rgba(242, 182, 92, 0.4);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  max-width: 92vw;
+  text-align: center;
+  box-shadow: var(--shadow);
+  animation: toast-in 0.2s ease;
+}
+
 /* ============ Toast ============ */
 .toast {
   position: fixed;

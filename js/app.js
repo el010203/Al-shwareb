@@ -483,6 +483,11 @@ async function requestPersistentStorage() {
   }
 }
 
+function updateOfflineBanner() {
+  const banner = $('#offline-banner');
+  if (banner) banner.hidden = navigator.onLine !== false;
+}
+
 function closeSettings() {
   $('#modal-settings').hidden = true;
 }
@@ -812,4 +817,7 @@ document.addEventListener('DOMContentLoaded', () => {
   resetTxForm();
   renderAll();
   requestPersistentStorage();
+  updateOfflineBanner();
+  window.addEventListener('online', updateOfflineBanner);
+  window.addEventListener('offline', updateOfflineBanner);
 });

@@ -4,7 +4,7 @@
    pick up the new version.
    ============================================================ */
 
-const CACHE_VERSION = 'al-shwareb-v5';
+const CACHE_VERSION = 'al-shwareb-v6';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -21,10 +21,21 @@ const CORE_ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE_VERSION)
-      .then((cache) => cache.addAll(CORE_ASSETS))
-      .then(() => self.skipWaiting())
+    (async () => {
+      const cache = await caches.open(CACHE_VERSION);
+      // Cache each file independently: one missing/failed file must
+      // never abort the whole install (addAll is all-or-nothing).
+      const results = await Promise.allSettled(
+        CORE_ASSETS.map((url) => cache.add(url))
+      );
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed) console.warn(`Al-shwareb SW: ${failed} asset(s) failed to precache`);
+
+      // Make sure the app shell is available under both URL spellings,
+      // because Android may launch '/' or '/index.html'.
+      const shell = await cache.match('./index.html');
+      if (shell) await cache.put('./', shell.clone());
+    })().then(() => self.skipWaiting())
   );
 });
 
@@ -36,6 +47,14 @@ self.addEventListener('activate', (event) => {
       .then(() => self.clients.claim())
   );
 });
+
+async function appShellFallback() {
+  return (
+    (await caches.match('./index.html')) ||
+    (await caches.match('./')) ||
+    Response.error()
+  );
+}
 
 // Cache-first for GET requests, falling back to the network and
 // caching successful responses so newly visited files work offline too.
@@ -55,7 +74,8 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => {
-          if (request.mode === 'navigate') return caches.match('./index.html');
+          // Offline: any navigation falls back to the cached app shell.
+          if (request.mode === 'navigate') return appShellFallback();
           return Response.error();
         });
     })
