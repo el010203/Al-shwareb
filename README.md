@@ -24,6 +24,11 @@ percent on each transaction, and see total profit plus month-by-month profit.
   profit**, average profit per month, a monthly profit chart, and a full monthly
   breakdown. Multi-month deals are spread across their actual calendar months, so each
   month shows its own profit and the money at work in that month.
+- **Standalone Finance tab** — completely independent of People, Transactions, and
+  Dashboard. Document an **amount paid**, choose either a **percentage** or a **fixed
+  amount** for the profit, set an optional **date to receive**, mark payouts as
+  **Received**, and inspect everything in **View history** (with status, profit-option,
+  and search filters).
 - **Filters** — view everything or narrow down by person and/or month.
 - **Edit & delete** any transaction or person.
 - **Backup / restore** — all data lives in your browser; export a `.json` backup file

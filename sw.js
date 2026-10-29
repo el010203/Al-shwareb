@@ -11,7 +11,7 @@
      successful network response is cached for future offline use.
    ============================================================ */
 
-const CACHE_VERSION = 'al-shwareb-v9';
+const CACHE_VERSION = 'al-shwareb-v10';
 const CORE_ASSETS = [
   './',
   './index.html',

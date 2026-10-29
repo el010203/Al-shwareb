@@ -12,6 +12,13 @@ const state = {
   filterMonth: 'all',
   editingId: null,
   historyPersonId: null,
+  finProfitType: 'percent',
+  finEditingId: null,
+  finFilterStatus: 'all',
+  finFilterType: 'all',
+  finHistStatus: 'all',
+  finHistType: 'all',
+  finHistQuery: '',
 };
 
 /* ---------- formatting helpers ---------- */
@@ -380,7 +387,7 @@ function startEdit(id) {
   $('#tx-cancel').hidden = false;
   updateProfitPreview();
   switchTab('transactions');
-  $('.form-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  $('#tab-transactions .form-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function formatPeriod(tx) {
@@ -443,7 +450,8 @@ function renderPeople() {
 function openSettings() {
   $('#set-currency').value = Store.currency;
   const count = Store.data.transactions.length;
-  $('#storage-note').textContent = `Currently stored on this device: ${Store.data.people.length} people, ${count} transaction${count === 1 ? '' : 's'}.`;
+  const finCount = Store.data.finance.length;
+  $('#storage-note').textContent = `Currently stored on this device: ${Store.data.people.length} people, ${count} transaction${count === 1 ? '' : 's'}, ${finCount} finance entr${finCount === 1 ? 'y' : 'ies'}.`;
   $('#modal-settings').hidden = false;
   renderStorageStatus();
 }
@@ -603,6 +611,357 @@ function renderHistory() {
 }
 
 /* ============================================================
+   FINANCE (STANDALONE) & FINANCE HISTORY MODAL
+   ============================================================ */
+
+function setFinProfitType(type) {
+  state.finProfitType = type === 'fixed' ? 'fixed' : 'percent';
+  $$('#fin-form .seg-btn').forEach((btn) => {
+    const active = btn.dataset.profitType === state.finProfitType;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-checked', active ? 'true' : 'false');
+  });
+
+  const wrap = $('#fin-profit-wrap');
+  const label = $('#fin-profit-label');
+  const suffix = $('#fin-profit-suffix');
+  const input = $('#fin-profit-value');
+
+  if (state.finProfitType === 'fixed') {
+    label.textContent = 'Fixed profit amount *';
+    suffix.textContent = Store.currency;
+    wrap.classList.add('input-suffix-wide');
+    input.placeholder = '0.00';
+  } else {
+    label.textContent = 'Profit percentage *';
+    suffix.textContent = '%';
+    wrap.classList.remove('input-suffix-wide');
+    input.placeholder = '0';
+  }
+
+  updateFinancePreview();
+}
+
+function readFinanceDraft() {
+  return {
+    paidDate: $('#fin-paid-date').value,
+    receiveDate: $('#fin-receive-date').value,
+    amount: Number($('#fin-amount').value) || 0,
+    profitType: state.finProfitType,
+    profitValue: Number($('#fin-profit-value').value) || 0,
+    received: $('#fin-received').value === 'received',
+  };
+}
+
+function updateFinanceReceiveHint() {
+  const { paidDate, receiveDate } = readFinanceDraft();
+  const hint = $('#fin-receive-hint');
+  if (!receiveDate) {
+    hint.textContent = 'Optional — pick when you expect to receive payout.';
+    return;
+  }
+  if (paidDate && receiveDate < paidDate) {
+    hint.textContent = 'Date to receive cannot be earlier than date paid.';
+    return;
+  }
+  const days = Store.financeDaysUntilReceive({ receiveDate });
+  let rel = '';
+  if (days === 0) rel = 'due today';
+  else if (days > 0) rel = `in ${days} day${days === 1 ? '' : 's'}`;
+  else rel = `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ago`;
+  hint.textContent = `${formatDate(receiveDate)} · ${rel}`;
+}
+
+function updateFinancePreview() {
+  const draft = readFinanceDraft();
+  const profit = Store.financeProfitOf(draft);
+  const pct = Store.financePercentOf(draft);
+  const totalReturn = Store.financeReturnOf(draft);
+
+  $('#fin-preview-profit').textContent = fmtMoney(profit);
+  if (draft.amount > 0) {
+    $('#fin-preview-return').textContent = `(total to receive: ${fmtMoney(totalReturn)} · ${fmtPct(pct)})`;
+  } else if (profit > 0) {
+    $('#fin-preview-return').textContent = `(fixed profit: ${fmtMoney(profit)})`;
+  } else {
+    $('#fin-preview-return').textContent = '';
+  }
+
+  const profitHint = $('#fin-profit-hint');
+  if (draft.profitType === 'percent') {
+    profitHint.textContent =
+      draft.amount > 0
+        ? `${fmtPct(draft.profitValue)} of ${fmtMoney(draft.amount)} = ${fmtMoney(profit)} profit.`
+        : 'Calculated as a percentage of the amount paid.';
+  } else {
+    profitHint.textContent =
+      draft.amount > 0
+        ? `Fixed profit · equals ${fmtPct(pct)} of amount paid.`
+        : `Fixed profit amount in ${Store.currency}.`;
+  }
+
+  updateFinanceReceiveHint();
+}
+
+function resetFinForm() {
+  state.finEditingId = null;
+  $('#fin-form').reset();
+  $('#fin-id').value = '';
+  $('#fin-paid-date').value = todayISO();
+  $('#fin-receive-date').value = '';
+  $('#fin-received').value = 'pending';
+  $('#fin-form-title').textContent = 'Add finance entry';
+  $('#fin-submit').textContent = 'Add entry';
+  $('#fin-cancel').hidden = true;
+  setFinProfitType('percent');
+}
+
+function startFinEdit(id) {
+  const entry = Store.financeById(id);
+  if (!entry) return;
+  state.finEditingId = id;
+  $('#fin-id').value = id;
+  $('#fin-amount').value = entry.amount;
+  $('#fin-paid-date').value = entry.paidDate;
+  $('#fin-receive-date').value = entry.receiveDate || '';
+  $('#fin-received').value = entry.received ? 'received' : 'pending';
+  $('#fin-profit-value').value = entry.profitValue;
+  $('#fin-note').value = entry.note;
+  $('#fin-form-title').textContent = 'Edit finance entry';
+  $('#fin-submit').textContent = 'Save changes';
+  $('#fin-cancel').hidden = false;
+  setFinProfitType(entry.profitType);
+  switchTab('finance');
+  $('#fin-form-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function financeStatusPill(f) {
+  const status = Store.financeStatusOf(f);
+  const labels = {
+    received: 'Received',
+    overdue: 'Overdue',
+    'due-today': 'Due today',
+    upcoming: 'Upcoming',
+    pending: 'Pending',
+  };
+  return `<span class="status-pill status-${status}">${labels[status] || 'Pending'}</span>`;
+}
+
+function formatReceiveCell(f) {
+  if (!f.receiveDate) {
+    return `<span class="muted">Not set</span><div style="margin-top:3px">${financeStatusPill(f)}</div>`;
+  }
+  const dateLabel = escapeHtml(formatDate(f.receiveDate));
+  if (f.received) {
+    return `<strong>${dateLabel}</strong><div style="margin-top:3px">${financeStatusPill(f)}</div>`;
+  }
+  const days = Store.financeDaysUntilReceive(f);
+  let sub = '';
+  if (days === 0) sub = 'Due today';
+  else if (days > 0) sub = `In ${days} day${days === 1 ? '' : 's'}`;
+  else sub = `${Math.abs(days)}d overdue`;
+  return `<strong>${dateLabel}</strong><div class="muted" style="font-size:0.78rem;margin-top:2px">${sub} · ${financeStatusPill(f)}</div>`;
+}
+
+function formatProfitOptionCell(f) {
+  if (f.profitType === 'fixed') {
+    return `<span class="fixed-pill">Fixed</span><div class="muted" style="font-size:0.78rem">${fmtPct(Store.financePercentOf(f))} eq.</div>`;
+  }
+  return `<span class="pct-pill">${fmtPct(f.profitValue)}</span><div class="muted" style="font-size:0.78rem">Percentage</div>`;
+}
+
+function buildFinanceTableHtml(entries) {
+  return `
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Date paid</th>
+            <th>Date to receive</th>
+            <th class="num">Amount paid</th>
+            <th class="num">Profit option</th>
+            <th class="num">Profit</th>
+            <th class="num">Total to receive</th>
+            <th>Note</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${entries
+            .map((f) => {
+              const profit = Store.financeProfitOf(f);
+              const totalReturn = Store.financeReturnOf(f);
+              const toggleLabel = f.received ? 'Undo' : 'Received';
+              return `
+            <tr>
+              <td data-label="Date paid"><strong>${escapeHtml(formatDate(f.paidDate))}</strong></td>
+              <td data-label="Date to receive">${formatReceiveCell(f)}</td>
+              <td data-label="Amount paid" class="num">${fmtMoney(f.amount)}</td>
+              <td data-label="Profit option" class="num">${formatProfitOptionCell(f)}</td>
+              <td data-label="Profit" class="num profit-cell">${fmtMoney(profit)}</td>
+              <td data-label="Total to receive" class="num"><strong>${fmtMoney(totalReturn)}</strong></td>
+              <td data-label="Note" class="note-cell"><span class="note-text">${f.note ? escapeHtml(f.note) : '<span class="muted">—</span>'}</span></td>
+              <td data-label="Actions">
+                <div class="row-actions">
+                  <button class="link-btn" data-action="fin-toggle-received" data-id="${f.id}">${toggleLabel}</button>
+                  <button class="link-btn" data-action="fin-edit" data-id="${f.id}">Edit</button>
+                  <button class="link-btn danger" data-action="fin-delete" data-id="${f.id}">Delete</button>
+                </div>
+              </td>
+            </tr>`;
+            })
+            .join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderFinance() {
+  const allEntries = Store.getFinanceEntries();
+  const s = Store.summarizeFinance(allEntries);
+
+  const histLabel = `View history (${allEntries.length})`;
+  $('#btn-fin-history').textContent = histLabel;
+  $('#btn-fin-history-bottom').textContent = histLabel;
+
+  // Refresh currency suffix if fixed mode is active
+  if (state.finProfitType === 'fixed') {
+    $('#fin-profit-suffix').textContent = Store.currency;
+  }
+  updateFinancePreview();
+
+  const nextEntry =
+    allEntries
+      .filter((f) => !f.received && f.receiveDate)
+      .sort((a, b) => a.receiveDate.localeCompare(b.receiveDate))[0] || null;
+
+  let nextSub = 'No pending dates';
+  if (nextEntry) {
+    const days = Store.financeDaysUntilReceive(nextEntry);
+    const when = days === 0 ? 'Due today' : days > 0 ? `In ${days}d` : `${Math.abs(days)}d overdue`;
+    nextSub = `${when} · ${fmtMoney(Store.financeReturnOf(nextEntry))}`;
+  } else if (s.pendingCount > 0) {
+    nextSub = `${fmtMoney(s.pendingReturn)} pending (no date set)`;
+  }
+
+  $('#fin-cards').innerHTML = `
+    <div class="card">
+      <div class="label">Amount paid</div>
+      <div class="value">${fmtMoney(s.totalPaid)}</div>
+      <div class="sub">${s.count} entr${s.count === 1 ? 'y' : 'ies'} · ${s.pendingCount} pending, ${s.receivedCount} received</div>
+    </div>
+    <div class="card profit">
+      <div class="label">Total profit</div>
+      <div class="value">${fmtMoney(s.totalProfit)}</div>
+      <div class="sub">Total to receive: ${fmtMoney(s.totalReturn)}</div>
+    </div>
+    <div class="card">
+      <div class="label">Overall return</div>
+      <div class="value">${fmtPct(s.overallPercent)}</div>
+      <div class="sub">${s.percentCount} percentage · ${s.fixedCount} fixed</div>
+    </div>
+    <div class="card">
+      <div class="label">Next to receive</div>
+      <div class="value" style="font-size:1.05rem">${nextEntry ? escapeHtml(formatDate(nextEntry.receiveDate)) : '—'}</div>
+      <div class="sub">${nextSub}</div>
+    </div>`;
+
+  const filtered = Store.getFinanceEntries({
+    status: state.finFilterStatus,
+    profitType: state.finFilterType,
+  });
+
+  const host = $('#fin-list');
+  if (!filtered.length) {
+    host.innerHTML = `
+      <div class="panel empty-state">
+        <span class="big">💰</span>
+        ${allEntries.length ? 'No finance entries match these filters.' : 'No finance entries yet.<br/>Use the form above to document an amount paid and profit.'}
+      </div>`;
+    return;
+  }
+
+  host.innerHTML = `<div class="panel" style="padding:8px 12px">${buildFinanceTableHtml(filtered)}</div>`;
+}
+
+function openFinanceHistory() {
+  $('#fin-hist-status').value = state.finHistStatus;
+  $('#fin-hist-type').value = state.finHistType;
+  $('#fin-hist-search').value = state.finHistQuery;
+  renderFinanceHistory();
+  $('#modal-finance-history').hidden = false;
+}
+
+function closeFinanceHistory() {
+  $('#modal-finance-history').hidden = true;
+}
+
+function renderFinanceHistory() {
+  const entries = Store.getFinanceEntries({
+    status: state.finHistStatus,
+    profitType: state.finHistType,
+    query: state.finHistQuery,
+  });
+  const s = Store.summarizeFinance(entries);
+
+  $('#fin-history-summary').innerHTML = `
+    <div class="history-stat"><span class="label">Entries</span><strong>${s.count}</strong><span class="muted" style="font-size:0.75rem">${s.pendingCount} pending · ${s.receivedCount} received</span></div>
+    <div class="history-stat"><span class="label">Amount paid</span><strong>${fmtMoney(s.totalPaid)}</strong></div>
+    <div class="history-stat"><span class="label">Total profit</span><strong class="profit-text">${fmtMoney(s.totalProfit)}</strong><span class="muted" style="font-size:0.75rem">${fmtPct(s.overallPercent)} overall</span></div>
+    <div class="history-stat"><span class="label">Total to receive</span><strong>${fmtMoney(s.totalReturn)}</strong><span class="muted" style="font-size:0.75rem">Pending: ${fmtMoney(s.pendingReturn)}</span></div>`;
+
+  const host = $('#fin-history-list');
+  if (!entries.length) {
+    const totalCount = Store.data.finance.length;
+    host.innerHTML = `
+      <div class="empty-state">
+        <span class="big">🗂️</span>
+        ${totalCount ? 'No finance history entries match the current filters.' : 'No finance entries recorded yet.'}
+      </div>`;
+    return;
+  }
+
+  host.innerHTML = buildFinanceTableHtml(entries);
+}
+
+function handleFinanceRowAction(e) {
+  const btn = e.target.closest('button[data-action]');
+  if (!btn) return;
+  const { action, id } = btn.dataset;
+
+  if (action === 'fin-toggle-received') {
+    try {
+      const updated = Store.toggleFinanceReceived(id);
+      if (state.finEditingId === id) {
+        $('#fin-received').value = updated.received ? 'received' : 'pending';
+      }
+      renderAll();
+      if (!$('#modal-finance-history').hidden) renderFinanceHistory();
+      toast(updated.received ? 'Marked as received.' : 'Marked as pending.');
+    } catch (err) {
+      toast(err.message, true);
+    }
+    return;
+  }
+
+  if (action === 'fin-edit') {
+    if (!$('#modal-finance-history').hidden) closeFinanceHistory();
+    startFinEdit(id);
+    return;
+  }
+
+  if (action === 'fin-delete') {
+    if (confirm('Delete this finance entry? This cannot be undone.')) {
+      Store.deleteFinance(id);
+      if (state.finEditingId === id) resetFinForm();
+      renderAll();
+      if (!$('#modal-finance-history').hidden) renderFinanceHistory();
+      toast('Finance entry deleted.');
+    }
+  }
+}
+
+/* ============================================================
    FULL RE-RENDER
    ============================================================ */
 
@@ -612,6 +971,7 @@ function renderAll() {
   renderDashboard();
   renderTransactionList();
   renderPeople();
+  renderFinance();
 }
 
 /* ============================================================
@@ -766,15 +1126,90 @@ function bindEvents() {
     }
   });
 
+  // Finance profit type toggle (Percentage vs Fixed amount)
+  $$('#fin-form .seg-btn').forEach((btn) => {
+    btn.addEventListener('click', () => setFinProfitType(btn.dataset.profitType));
+  });
+
+  // Finance live preview
+  $('#fin-amount').addEventListener('input', updateFinancePreview);
+  $('#fin-profit-value').addEventListener('input', updateFinancePreview);
+  $('#fin-receive-date').addEventListener('change', updateFinancePreview);
+  $('#fin-paid-date').addEventListener('change', updateFinancePreview);
+
+  // Add / edit finance entry
+  $('#fin-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const payload = {
+      paidDate: $('#fin-paid-date').value,
+      receiveDate: $('#fin-receive-date').value,
+      amount: $('#fin-amount').value,
+      profitType: state.finProfitType,
+      profitValue: $('#fin-profit-value').value,
+      received: $('#fin-received').value === 'received',
+      note: $('#fin-note').value,
+    };
+    try {
+      if (state.finEditingId) {
+        Store.updateFinance(state.finEditingId, payload);
+        toast('Finance entry updated.');
+      } else {
+        Store.addFinance(payload);
+        toast('Finance entry added.');
+      }
+      resetFinForm();
+      renderAll();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+
+  $('#fin-cancel').addEventListener('click', resetFinForm);
+
+  // Finance tab filters
+  $('#fin-filter-status').addEventListener('change', (e) => {
+    state.finFilterStatus = e.target.value;
+    renderFinance();
+  });
+  $('#fin-filter-type').addEventListener('change', (e) => {
+    state.finFilterType = e.target.value;
+    renderFinance();
+  });
+
+  // Finance row actions (tab list + history modal)
+  $('#fin-list').addEventListener('click', handleFinanceRowAction);
+  $('#fin-history-list').addEventListener('click', handleFinanceRowAction);
+
+  // Finance history modal
+  $('#btn-fin-history').addEventListener('click', openFinanceHistory);
+  $('#btn-fin-history-bottom').addEventListener('click', openFinanceHistory);
+  $$('[data-close-fin-history]').forEach((el) => el.addEventListener('click', closeFinanceHistory));
+
+  $('#fin-hist-status').addEventListener('change', (e) => {
+    state.finHistStatus = e.target.value;
+    renderFinanceHistory();
+  });
+  $('#fin-hist-type').addEventListener('change', (e) => {
+    state.finHistType = e.target.value;
+    renderFinanceHistory();
+  });
+  $('#fin-hist-search').addEventListener('input', (e) => {
+    state.finHistQuery = e.target.value;
+    renderFinanceHistory();
+  });
+
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!$('#modal-settings').hidden) closeSettings();
     if (!$('#modal-history').hidden) closeHistory();
+    if (!$('#modal-finance-history').hidden) closeFinanceHistory();
   });
 
   $('#set-currency').addEventListener('change', (e) => {
     Store.setCurrency(e.target.value || 'EGP');
+    updateProfitPreview();
     renderAll();
+    if (!$('#modal-finance-history').hidden) renderFinanceHistory();
     toast('Currency updated.');
   });
 
@@ -792,7 +1227,15 @@ function bindEvents() {
         state.dashPerson = 'all';
         state.filterPerson = 'all';
         state.filterMonth = 'all';
+        state.finFilterStatus = 'all';
+        state.finFilterType = 'all';
+        state.finHistStatus = 'all';
+        state.finHistType = 'all';
+        state.finHistQuery = '';
+        $('#fin-filter-status').value = 'all';
+        $('#fin-filter-type').value = 'all';
         resetTxForm();
+        resetFinForm();
         renderAll();
         closeSettings();
         toast('Backup restored.');
@@ -805,20 +1248,28 @@ function bindEvents() {
   });
 
   $('#btn-sample').addEventListener('click', () => {
-    if (Store.data.people.length && !confirm('Add sample people and transactions to the current data?')) return;
+    if ((Store.data.people.length || Store.data.finance.length) && !confirm('Add sample data to the current data?')) return;
     Store.loadSampleData();
     renderAll();
     toast('Sample data loaded.');
   });
 
   $('#btn-erase').addEventListener('click', () => {
-    if (!confirm('Erase ALL people and transactions from this device?')) return;
+    if (!confirm('Erase ALL people, transactions, and finance entries from this device?')) return;
     if (!confirm('Really erase everything? Consider exporting a backup first.')) return;
     Store.eraseAll();
     state.dashPerson = 'all';
     state.filterPerson = 'all';
     state.filterMonth = 'all';
+    state.finFilterStatus = 'all';
+    state.finFilterType = 'all';
+    state.finHistStatus = 'all';
+    state.finHistType = 'all';
+    state.finHistQuery = '';
+    $('#fin-filter-status').value = 'all';
+    $('#fin-filter-type').value = 'all';
     resetTxForm();
+    resetFinForm();
     renderAll();
     closeSettings();
     toast('All data erased.');
@@ -832,6 +1283,7 @@ document.addEventListener('DOMContentLoaded', () => {
   fillMonthsSelect();
   bindEvents();
   resetTxForm();
+  resetFinForm();
   renderAll();
   requestPersistentStorage();
   updateOfflineBanner();

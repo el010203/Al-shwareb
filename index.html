@@ -41,6 +41,7 @@
       <button class="tab active" data-tab="dashboard" role="tab">Dashboard</button>
       <button class="tab" data-tab="transactions" role="tab">Transactions</button>
       <button class="tab" data-tab="people" role="tab">People</button>
+      <button class="tab" data-tab="finance" role="tab">Finance</button>
     </nav>
   </header>
 
@@ -145,6 +146,107 @@
       </div>
       <div id="people-list"></div>
     </section>
+
+    <!-- ============ FINANCE (STANDALONE) ============ -->
+    <section id="tab-finance" class="tab-panel">
+      <div id="fin-cards" class="cards"></div>
+
+      <div id="fin-form-panel" class="panel form-panel">
+        <div class="panel-head fin-panel-head">
+          <div>
+            <h2 id="fin-form-title">Add finance entry</h2>
+            <p class="hint" style="margin-top:2px">Standalone finance records — separate from People, Transactions, and Dashboard.</p>
+          </div>
+          <button type="button" id="btn-fin-history" class="btn btn-secondary btn-sm">View history</button>
+        </div>
+
+        <form id="fin-form" novalidate>
+          <input type="hidden" id="fin-id" />
+          <div class="form-grid">
+            <div class="field">
+              <label for="fin-amount">Amount paid *</label>
+              <input type="number" id="fin-amount" class="input" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required />
+            </div>
+
+            <div class="field">
+              <label for="fin-receive-date">Date to receive</label>
+              <input type="date" id="fin-receive-date" class="input" />
+              <p class="hint" id="fin-receive-hint">Optional — pick when you expect to receive payout.</p>
+            </div>
+
+            <div class="field">
+              <label id="fin-profit-type-label">Profit option *</label>
+              <div class="seg-control" role="radiogroup" aria-labelledby="fin-profit-type-label">
+                <button type="button" class="seg-btn active" data-profit-type="percent" role="radio" aria-checked="true">Percentage (%)</button>
+                <button type="button" class="seg-btn" data-profit-type="fixed" role="radio" aria-checked="false">Fixed amount</button>
+              </div>
+              <p class="hint">Choose a profit percentage or an exact fixed profit.</p>
+            </div>
+
+            <div class="field">
+              <label for="fin-profit-value" id="fin-profit-label">Profit percentage *</label>
+              <div id="fin-profit-wrap" class="input-suffix">
+                <input type="number" id="fin-profit-value" class="input" min="0" step="0.01" inputmode="decimal" placeholder="0" required />
+                <span id="fin-profit-suffix">%</span>
+              </div>
+              <p class="hint" id="fin-profit-hint">Calculated as a percentage of the amount paid.</p>
+            </div>
+
+            <div class="field">
+              <label for="fin-paid-date">Date paid *</label>
+              <input type="date" id="fin-paid-date" class="input" required />
+            </div>
+
+            <div class="field">
+              <label for="fin-received">Payout status</label>
+              <select id="fin-received" class="select">
+                <option value="pending">Pending — not received yet</option>
+                <option value="received">Received</option>
+              </select>
+            </div>
+
+            <div class="field field-full">
+              <label for="fin-note">Documentation note</label>
+              <textarea id="fin-note" class="input" rows="2" placeholder="Details, what was paid for, reference, anything worth documenting…"></textarea>
+            </div>
+          </div>
+
+          <div class="form-footer">
+            <div class="profit-preview">
+              Calculated profit: <strong id="fin-preview-profit">0.00</strong>
+              <span class="muted" id="fin-preview-return"></span>
+            </div>
+            <div class="form-actions">
+              <button type="button" id="fin-cancel" class="btn btn-ghost" hidden>Cancel</button>
+              <button type="submit" class="btn btn-primary" id="fin-submit">Add entry</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="filter-bar fin-list-bar">
+        <div class="filter-group">
+          <label for="fin-filter-status">Status</label>
+          <select id="fin-filter-status" class="select">
+            <option value="all">All entries</option>
+            <option value="pending">Pending to receive</option>
+            <option value="due">Due / Overdue</option>
+            <option value="received">Received</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="fin-filter-type">Profit option</label>
+          <select id="fin-filter-type" class="select">
+            <option value="all">All options</option>
+            <option value="percent">Percentage (%)</option>
+            <option value="fixed">Fixed amount</option>
+          </select>
+        </div>
+        <button type="button" id="btn-fin-history-bottom" class="btn btn-secondary">View history</button>
+      </div>
+
+      <div id="fin-list"></div>
+    </section>
   </main>
 
   <!-- ============ SETTINGS MODAL ============ -->
@@ -197,6 +299,44 @@
       <div class="modal-body">
         <div id="history-summary" class="history-summary"></div>
         <div id="history-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FINANCE HISTORY MODAL ============ -->
+  <div id="modal-finance-history" class="modal" hidden>
+    <div class="modal-backdrop" data-close-fin-history></div>
+    <div class="modal-card modal-lg" role="dialog" aria-modal="true" aria-labelledby="fin-history-title">
+      <div class="modal-head">
+        <h2 id="fin-history-title">Finance history</h2>
+        <button class="icon-btn" data-close-fin-history aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="fin-history-summary" class="history-summary"></div>
+        <div class="filter-bar fin-hist-filters">
+          <div class="filter-group">
+            <label for="fin-hist-status">Status</label>
+            <select id="fin-hist-status" class="select">
+              <option value="all">All entries</option>
+              <option value="pending">Pending to receive</option>
+              <option value="due">Due / Overdue</option>
+              <option value="received">Received</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="fin-hist-type">Profit option</label>
+            <select id="fin-hist-type" class="select">
+              <option value="all">All options</option>
+              <option value="percent">Percentage (%)</option>
+              <option value="fixed">Fixed amount</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="fin-hist-search">Search</label>
+            <input type="search" id="fin-hist-search" class="input" placeholder="Search notes, dates, amounts…" />
+          </div>
+        </div>
+        <div id="fin-history-list"></div>
       </div>
     </div>
   </div>
