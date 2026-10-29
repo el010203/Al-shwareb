@@ -1,8 +1,8 @@
 /* ============================================================
-   Al-shwareb — storage & calculation layer (v3)
+   Al-shwareb — storage & calculation layer (v4)
    All data is kept in the browser's localStorage.
 
-   Transaction model:
+   Transaction model (People / Transactions / Dashboard):
      startDate   'YYYY-MM-DD' — exact day the deal starts
      months      duration in whole months (1, 2, 3, …)
      amount      money put once
@@ -12,6 +12,14 @@
    The deal is active on the half-open interval [startDate, endDate),
    where endDate = startDate + months. Profit is spread by actual days,
    so a deal starting just before month-end is prorated correctly.
+
+   Standalone Finance model (independent of People & Dashboard):
+     paidDate     'YYYY-MM-DD' — day the amount was paid
+     receiveDate  'YYYY-MM-DD' | '' — expected date to receive payout
+     amount       amount paid
+     profitType   'percent' | 'fixed'
+     profitValue  percentage rate or fixed profit amount
+     received     boolean — whether payout has been received
    ============================================================ */
 
 const DB_KEY = 'alshwareb_db_v1';
@@ -33,17 +41,20 @@ const Store = {
     }
     if (!this.data || !Array.isArray(this.data.people) || !Array.isArray(this.data.transactions)) {
       this.data = {
-        meta: { version: 3, currency: 'EGP', createdAt: new Date().toISOString() },
+        meta: { version: 4, currency: 'EGP', createdAt: new Date().toISOString() },
         people: [],
         transactions: [],
+        finance: [],
       };
       this.save();
     }
-    if (!this.data.meta) this.data.meta = { version: 3, currency: 'EGP' };
+    if (!this.data.meta) this.data.meta = { version: 4, currency: 'EGP' };
     if (!this.data.meta.currency) this.data.meta.currency = 'EGP';
-    this.data.meta.version = 3;
+    if (!Array.isArray(this.data.finance)) this.data.finance = [];
+    this.data.meta.version = 4;
     // Migrate v1 (period month) and v2 (startMonth) records to exact dates.
     this.data.transactions = this.data.transactions.map((tx) => this.normalizeTx(tx));
+    this.data.finance = this.data.finance.map((f) => this.normalizeFinance(f));
     this.save();
     return this.data;
   },
@@ -67,6 +78,33 @@ const Store = {
     delete copy.period;
     delete copy.startMonth;
     return copy;
+  },
+
+  normalizeFinance(item) {
+    const paidDate =
+      item && item.paidDate && DATE_RE.test(item.paidDate) && isValidDate(item.paidDate)
+        ? item.paidDate
+        : todayISO();
+    const receiveDate =
+      item && item.receiveDate && DATE_RE.test(item.receiveDate) && isValidDate(item.receiveDate)
+        ? item.receiveDate
+        : '';
+    const profitType = item && item.profitType === 'fixed' ? 'fixed' : 'percent';
+    let amount = Number(item && item.amount);
+    if (!isFinite(amount) || amount < 0) amount = 0;
+    let profitValue = Number(item && item.profitValue);
+    if (!isFinite(profitValue) || profitValue < 0) profitValue = 0;
+    return {
+      id: (item && item.id) || this.uid(),
+      paidDate,
+      receiveDate,
+      amount: round2(amount),
+      profitType,
+      profitValue: round2(profitValue),
+      received: Boolean(item && item.received),
+      note: String((item && item.note) || '').trim(),
+      createdAt: (item && item.createdAt) || new Date().toISOString(),
+    };
   },
 
   /* ---------- helpers ---------- */
@@ -336,6 +374,210 @@ const Store = {
     return [...set].sort().reverse();
   },
 
+  /* ---------- standalone finance ---------- */
+
+  financeById(id) {
+    return this.data.finance.find((f) => f.id === id) || null;
+  },
+
+  getFinanceEntries({ status = 'all', profitType = 'all', query = '' } = {}) {
+    const today = todayISO();
+    const q = String(query || '').trim().toLowerCase();
+    let list = this.data.finance;
+
+    if (status === 'pending') {
+      list = list.filter((f) => !f.received);
+    } else if (status === 'received') {
+      list = list.filter((f) => f.received);
+    } else if (status === 'due') {
+      list = list.filter((f) => !f.received && f.receiveDate && f.receiveDate <= today);
+    }
+
+    if (profitType === 'percent' || profitType === 'fixed') {
+      list = list.filter((f) => f.profitType === profitType);
+    }
+
+    if (q) {
+      list = list.filter((f) => {
+        const hay = `${f.note} ${f.paidDate} ${f.receiveDate} ${f.amount} ${this.financeProfitOf(f)}`.toLowerCase();
+        return hay.includes(q);
+      });
+    }
+
+    return [...list].sort((a, b) => {
+      if (a.paidDate !== b.paidDate) return b.paidDate.localeCompare(a.paidDate);
+      return b.createdAt.localeCompare(a.createdAt);
+    });
+  },
+
+  validateFinance({ paidDate, receiveDate, amount, profitType, profitValue }) {
+    if (!paidDate || !DATE_RE.test(paidDate) || !isValidDate(paidDate)) {
+      throw new Error('Please choose a valid date paid.');
+    }
+    const cleanReceive = String(receiveDate || '').trim();
+    if (cleanReceive && (!DATE_RE.test(cleanReceive) || !isValidDate(cleanReceive))) {
+      throw new Error('Please choose a valid date to receive.');
+    }
+    if (cleanReceive && cleanReceive < paidDate) {
+      throw new Error('Date to receive cannot be earlier than date paid.');
+    }
+    if (amount === '' || amount === null || amount === undefined) {
+      throw new Error('Please enter the amount paid.');
+    }
+    const numAmount = Number(amount);
+    if (!isFinite(numAmount) || numAmount <= 0) {
+      throw new Error('Amount paid must be greater than 0.');
+    }
+    if (profitType !== 'percent' && profitType !== 'fixed') {
+      throw new Error('Please choose percentage or fixed amount for profit.');
+    }
+    if (profitValue === '' || profitValue === null || profitValue === undefined) {
+      throw new Error(
+        profitType === 'percent'
+          ? 'Please enter the profit percentage.'
+          : 'Please enter the fixed profit amount.'
+      );
+    }
+    const numProfitVal = Number(profitValue);
+    if (!isFinite(numProfitVal) || numProfitVal < 0) {
+      throw new Error('Profit value must be 0 or more.');
+    }
+    return {
+      paidDate,
+      receiveDate: cleanReceive,
+      amount: round2(numAmount),
+      profitType,
+      profitValue: round2(numProfitVal),
+    };
+  },
+
+  addFinance(fields) {
+    const v = this.validateFinance(fields);
+    const entry = {
+      id: this.uid(),
+      paidDate: v.paidDate,
+      receiveDate: v.receiveDate,
+      amount: v.amount,
+      profitType: v.profitType,
+      profitValue: v.profitValue,
+      received: Boolean(fields.received),
+      note: String(fields.note || '').trim(),
+      createdAt: new Date().toISOString(),
+    };
+    this.data.finance.push(entry);
+    this.save();
+    return entry;
+  },
+
+  updateFinance(id, fields) {
+    const entry = this.financeById(id);
+    if (!entry) throw new Error('Finance entry not found.');
+    const merged = {
+      paidDate: fields.paidDate !== undefined ? fields.paidDate : entry.paidDate,
+      receiveDate: fields.receiveDate !== undefined ? fields.receiveDate : entry.receiveDate,
+      amount: fields.amount !== undefined ? fields.amount : entry.amount,
+      profitType: fields.profitType !== undefined ? fields.profitType : entry.profitType,
+      profitValue: fields.profitValue !== undefined ? fields.profitValue : entry.profitValue,
+    };
+    const v = this.validateFinance(merged);
+    entry.paidDate = v.paidDate;
+    entry.receiveDate = v.receiveDate;
+    entry.amount = v.amount;
+    entry.profitType = v.profitType;
+    entry.profitValue = v.profitValue;
+    if (fields.received !== undefined) entry.received = Boolean(fields.received);
+    if (fields.note !== undefined) entry.note = String(fields.note || '').trim();
+    this.save();
+    return entry;
+  },
+
+  toggleFinanceReceived(id) {
+    const entry = this.financeById(id);
+    if (!entry) throw new Error('Finance entry not found.');
+    entry.received = !entry.received;
+    this.save();
+    return entry;
+  },
+
+  deleteFinance(id) {
+    this.data.finance = this.data.finance.filter((f) => f.id !== id);
+    this.save();
+  },
+
+  financeProfitOf(f) {
+    const amt = Number(f.amount) || 0;
+    const val = Number(f.profitValue) || 0;
+    if (f.profitType === 'fixed') return round2(val);
+    return round2((amt * val) / 100);
+  },
+
+  financePercentOf(f) {
+    const amt = Number(f.amount) || 0;
+    if (f.profitType === 'percent') return round2(Number(f.profitValue) || 0);
+    const profit = this.financeProfitOf(f);
+    return amt > 0 ? round2((profit / amt) * 100) : 0;
+  },
+
+  financeReturnOf(f) {
+    return round2((Number(f.amount) || 0) + this.financeProfitOf(f));
+  },
+
+  // 'received' | 'overdue' | 'due-today' | 'upcoming' | 'pending'
+  financeStatusOf(f, asOf = todayISO()) {
+    if (f.received) return 'received';
+    if (!f.receiveDate) return 'pending';
+    if (f.receiveDate < asOf) return 'overdue';
+    if (f.receiveDate === asOf) return 'due-today';
+    return 'upcoming';
+  },
+
+  financeDaysUntilReceive(f, asOf = todayISO()) {
+    if (!f.receiveDate) return null;
+    return daysBetween(asOf, f.receiveDate);
+  },
+
+  summarizeFinance(list) {
+    let totalPaid = 0;
+    let totalProfit = 0;
+    let pendingReturn = 0;
+    let receivedReturn = 0;
+    let pendingCount = 0;
+    let receivedCount = 0;
+    let percentCount = 0;
+    let fixedCount = 0;
+    for (const f of list) {
+      const amt = Number(f.amount) || 0;
+      const prof = this.financeProfitOf(f);
+      const ret = round2(amt + prof);
+      totalPaid += amt;
+      totalProfit += prof;
+      if (f.received) {
+        receivedCount += 1;
+        receivedReturn += ret;
+      } else {
+        pendingCount += 1;
+        pendingReturn += ret;
+      }
+      if (f.profitType === 'fixed') fixedCount += 1;
+      else percentCount += 1;
+    }
+    totalPaid = round2(totalPaid);
+    totalProfit = round2(totalProfit);
+    return {
+      count: list.length,
+      totalPaid,
+      totalProfit,
+      totalReturn: round2(totalPaid + totalProfit),
+      overallPercent: totalPaid > 0 ? round2((totalProfit / totalPaid) * 100) : 0,
+      pendingCount,
+      receivedCount,
+      pendingReturn: round2(pendingReturn),
+      receivedReturn: round2(receivedReturn),
+      percentCount,
+      fixedCount,
+    };
+  },
+
   /* ---------- backup / restore ---------- */
 
   exportData() {
@@ -352,19 +594,22 @@ const Store = {
     if (!obj || !Array.isArray(obj.people) || !Array.isArray(obj.transactions) || !obj.meta) {
       throw new Error('The file does not look like an Al-shwareb backup.');
     }
+    const rawFinance = Array.isArray(obj.finance) ? obj.finance : [];
     this.data = {
-      meta: { version: 3, currency: obj.meta.currency || 'EGP', createdAt: obj.meta.createdAt || new Date().toISOString() },
+      meta: { version: 4, currency: obj.meta.currency || 'EGP', createdAt: obj.meta.createdAt || new Date().toISOString() },
       people: obj.people,
       transactions: obj.transactions.map((tx) => this.normalizeTx(tx)),
+      finance: rawFinance.map((f) => this.normalizeFinance(f)),
     };
     this.save();
   },
 
   eraseAll() {
     this.data = {
-      meta: { version: 3, currency: this.currency, createdAt: new Date().toISOString() },
+      meta: { version: 4, currency: this.currency, createdAt: new Date().toISOString() },
       people: [],
       transactions: [],
+      finance: [],
     };
     this.save();
   },
@@ -399,6 +644,42 @@ const Store = {
         amount,
         percent,
         note,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    const financeSamples = [
+      {
+        paidDate: addDaysISO(today, -6),
+        receiveDate: addDaysISO(today, 24),
+        amount: 8000,
+        profitType: 'percent',
+        profitValue: 12,
+        received: false,
+        note: 'Supplier batch payment — 12% profit',
+      },
+      {
+        paidDate: addDaysISO(today, -15),
+        receiveDate: addDaysISO(today, 15),
+        amount: 4500,
+        profitType: 'fixed',
+        profitValue: 650,
+        received: false,
+        note: 'Short-term goods — fixed 650 profit',
+      },
+      {
+        paidDate: addDaysISO(today, -45),
+        receiveDate: addDaysISO(today, -15),
+        amount: 3200,
+        profitType: 'percent',
+        profitValue: 10,
+        received: true,
+        note: 'Completed payout — received in full',
+      },
+    ];
+    for (const sample of financeSamples) {
+      this.data.finance.push({
+        id: this.uid(),
+        ...sample,
         createdAt: new Date().toISOString(),
       });
     }

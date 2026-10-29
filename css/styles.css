@@ -177,6 +177,7 @@ textarea.input { resize: vertical; min-height: 44px; }
 
 .input-suffix { position: relative; }
 .input-suffix .input { padding-right: 34px; }
+.input-suffix-wide .input { padding-right: 68px; }
 .input-suffix span {
   position: absolute;
   right: 12px;
@@ -185,6 +186,67 @@ textarea.input { resize: vertical; min-height: 44px; }
   color: var(--muted);
   font-weight: 700;
   pointer-events: none;
+}
+
+.seg-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: var(--input-bg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+}
+.seg-btn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  text-align: center;
+  white-space: nowrap;
+}
+.seg-btn:hover { color: var(--ink); }
+.seg-btn.active {
+  background: var(--green-soft);
+  color: var(--green);
+  border-color: rgba(46, 204, 150, 0.35);
+  font-weight: 700;
+}
+
+.fin-panel-head {
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.fin-list-bar {
+  justify-content: space-between;
+}
+.fin-list-bar #btn-fin-history-bottom {
+  margin-left: auto;
+}
+.fin-hist-filters {
+  margin-bottom: 14px;
+}
+.fin-hist-filters .filter-group {
+  max-width: none;
+}
+.fixed-pill {
+  display: inline-block;
+  background: var(--teal-soft);
+  color: var(--teal);
+  border: 1px solid rgba(103, 211, 234, 0.28);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .inline-form { display: flex; gap: 10px; margin-top: 12px; }
@@ -531,6 +593,26 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
   color: var(--gold);
   border-color: rgba(242, 182, 92, 0.3);
 }
+.status-received {
+  background: var(--green-soft);
+  color: var(--green);
+  border-color: rgba(46, 204, 150, 0.3);
+}
+.status-due-today {
+  background: rgba(242, 182, 92, 0.18);
+  color: var(--gold);
+  border-color: rgba(242, 182, 92, 0.4);
+}
+.status-overdue {
+  background: var(--red-soft);
+  color: var(--red);
+  border-color: rgba(255, 124, 124, 0.35);
+}
+.status-pending {
+  background: var(--teal-soft);
+  color: var(--teal);
+  border-color: rgba(103, 211, 234, 0.28);
+}
 
 /* ============ Offline banner (small bottom toast) ============ */
 .offline-banner {
@@ -613,6 +695,10 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
 
 /* ============ Mobile table → cards ============ */
 @media (max-width: 640px) {
+  .tabs { gap: 2px; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { padding: 10px 11px; font-size: 0.88rem; }
+
   .form-grid { grid-template-columns: 1fr; }
   .cards { grid-template-columns: 1fr 1fr; gap: 10px; }
   .card .value { font-size: 1.08rem; }
@@ -655,4 +741,5 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
 
 @media (min-width: 820px) {
   .cards { grid-template-columns: repeat(4, 1fr); }
+  .history-summary { grid-template-columns: repeat(4, 1fr); }
 }
