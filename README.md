@@ -94,11 +94,28 @@ What it recognises:
   `vf.eg/vfcash?id=money_transfer` are ignored so their wording cannot be mistaken for
   a transaction.
 - **Extras** — transaction reference, counterparty name or phone (`لرقم 01037222406`
-  becomes `phone 01037222406`), and any fee (`مصاريف الخدمة 1 جنيه`). The fee is shown as
-  a note rather than added to the amount, because operators usually debit it separately.
+  becomes `phone 01037222406`, and `المسجل بإسم ...` gives the registered name), and any
+  fee (`مصاريف الخدمة 1 جنيه`). The fee is shown as a note rather than added to the
+  amount, because operators usually debit it separately.
+- **Accounts** — the destination wallet is suggested when the message mentions Vodafone
+  Cash / محفظتك, and a bank account when it mentions InstaPay. Advert links are stripped
+  first, so a link containing `vfcash` cannot be mistaken for an account called "Cash".
 - **Balances are ignored** — `رصيد حسابك ... الحالي 9.20` never becomes the amount.
 
-Example — this Vodafone Cash message:
+Example — an incoming Vodafone Cash message:
+
+```
+تم استلام مبلغ 200.00 جنيه من 01014271861؛
+المسجل بإسم YOSSEF ALAA ELDEIN MOHAMMED TOLBA
+على رقم محفظتك 01014271861 بتاريخ 13:42 26-10-28.
+رصيدك الحالي: 215.20 جنيه
+رقم العملية: 025177594313
+```
+is read as **income · 200.00 EGP · 28 Oct 2026** with the note
+`Vodafone Cash · YOSSEF ALAA ELDEIN MOHAMMED TOLBA · Ref 025177594313` — note that the
+`215.20` balance is not mistaken for the amount.
+
+Outgoing example — this Vodafone Cash message:
 
 ```
 تم تحويل 205 جنيه لرقم 01037222406 مصاريف الخدمة 1 جنيه رصيد حسابك فى فودافون كاش الحالي 9.20.

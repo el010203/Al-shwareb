@@ -1642,7 +1642,12 @@
       .replace(/\u066B/g, '.')
       .replace(/\u066C|\u060C/g, ',')
       .replace(/\u00A0/g, ' ')
-      .replace(/[\u200E\u200F\u202A-\u202E]/g, '');
+      .replace(/[\u200E\u200F\u202A-\u202E\u200B-\u200D]/g, '')
+      // Arabic / fullwidth punctuation used by the operators
+      .replace(/[\u061B\uFF1B]/g, ';')
+      .replace(/[\u060C\uFF0C]/g, ',')
+      .replace(/\uFF1A/g, ':')
+      .replace(/[\u061F\uFF1F]/g, '?');
   }
 
   const URL_RE = /(?:https?:\/\/|www\.)\S+/gi;
@@ -1822,18 +1827,19 @@
   }
 
   const NAME_STOP =
-    /(via|successfully|successful|\bwas\b|\bhas\b|\bhave\b|عبر|بنجاح|باتصال|الساعة|بتاريخ|date|balance|رصيد|ref|fee|رسوم|عمولة|مصاريف|خدمة|خدمه)/i;
+    /(via|successfully|successful|\bwas\b|\bhas\b|\bhave\b|\bon\b|\bat\b|\bdate\b|\bref\b|\bbalance\b|عبر|بنجاح|باتصال|الساعة|بتاريخ|تاريخ|رقم|برقم|على|في|فى|المسجل|رصيد|رسوم|عمولة|مصاريف|خدمة|خدمه)/i;
 
   function cleanCounterparty(raw) {
     let name = String(raw || '').split(NAME_STOP)[0];
-    const punct = name.search(/[.،,]/);
+    const punct = name.search(/[.،,;:!?]/);
     if (punct > 1) name = name.slice(0, punct);
     // "من X إلى Y" / "from X to Y" → the second party is the interesting one.
     const parts = name.split(/\s+(?:إلى|الى|to)\s+/i);
     name = parts[parts.length - 1];
     name = name.replace(/^(?:محفظتك|محفظتي|حسابك|حسابي|your\s+wallet|your\s+account)\s*/i, '');
-    name = name.replace(/[\s.,:;—-]+$/, '').replace(/^[\s.,:;—-]+/, '').trim();
-    if (/^0\d{7,}$/.test(name)) return `phone ${name}`;
+    name = name.replace(/^[^\p{L}\p{N}+]+|[^\p{L}\p{N}+]+$/gu, '').replace(/\s+/g, ' ').trim();
+    const digits = name.replace(/[\s-]/g, '');
+    if (/^0\d{7,}$/.test(digits)) return `phone ${digits}`;
     if (!/[A-Za-z\u0621-\u064A]/.test(name)) return '';
     return name.slice(0, 40);
   }
@@ -1841,6 +1847,8 @@
   function findCounterparty(text) {
     // Prefer the recipient/destination, then the sender.
     const patterns = [
+      // "المسجل بإسم YOSSEF ..." / "registered as ..." — the clearest source of a name
+      /(?:بإسم|باسم|بالإسم|بالاسم|registered\s+(?:as|in\s+the\s+name\s+of)|under\s+the\s+name\s+of)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’-]{1,44})/i,
       /(?:لرقم|ل\s*رقم|إلى\s*رقم|الى\s*رقم|برقم)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’-]{1,44})/i,
       /(?:\bto\s*(?:number|no\.?)?)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’-]{1,44})/i,
       /(?:\bto\b|إلى|الى)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’-]{1,44})/i,
@@ -1869,16 +1877,24 @@
   }
 
   function suggestAccountId(text) {
-    const hay = text.toLowerCase();
-    const byName = PF.data.accounts.find((a) => a.name.length >= 3 && hay.includes(a.name.toLowerCase()));
+    // Only the message body counts: advert links such as "vfcash" must not
+    // make an account called "Cash" look like a match.
+    const hay = stripUrls(text).toLowerCase();
+    const byName = PF.data.accounts
+      .filter((a) => a.name.trim().length >= 3 && hay.includes(a.name.trim().toLowerCase()))
+      .sort((a, b) => b.name.length - a.name.length)[0];
     if (byName) return byName.id;
-    if (/vodafone|فودافون/.test(hay)) {
-      const wallet = PF.data.accounts.find((a) => /vodafone|فودافون|wallet|محفظة/i.test(a.name));
-      if (wallet) return wallet.id;
+    if (/vodafone|فودافون|محفظتك|محفظة|wallet/.test(hay)) {
+      const named = PF.data.accounts.find((a) => /vodafone|فودافون|wallet|محفظة/i.test(a.name));
+      if (named) return named.id;
+      const byType = PF.data.accounts.find((a) => a.type === 'wallet');
+      if (byType) return byType.id;
     }
     if (/instapay|انستا/.test(hay)) {
-      const bank = PF.data.accounts.find((a) => /bank|insta|بنك/i.test(a.name));
-      if (bank) return bank.id;
+      const named = PF.data.accounts.find((a) => /bank|insta|بنك/i.test(a.name));
+      if (named) return named.id;
+      const byType = PF.data.accounts.find((a) => a.type === 'bank');
+      if (byType) return byType.id;
     }
     return PF.data.accounts[0].id;
   }
@@ -1908,7 +1924,9 @@
 
     // Advert links carry words like "transfer" and "cash"; never let them
     // influence direction, amount or reference detection.
-    const analysis = stripUrls(text).replace(/\s+/g, ' ').trim();
+    // Keep line breaks: operator SMS separates the name, wallet number and
+    // reference onto their own lines, and fields must not bleed into each other.
+    const analysis = stripUrls(text).replace(/[ \t]+/g, ' ').trim();
     const amountCand = pickAmount(analysis);
     if (!amountCand || amountCand.value <= 0) {
       draft.error = 'Could not find an amount in this message.';
@@ -1922,8 +1940,8 @@
     draft.fee = findFee(analysis, amountCand);
     draft.ref = findReference(analysis);
     draft.counterparty = findCounterparty(analysis);
-    draft.accountId = suggestAccountId(text);
-    draft.categoryId = suggestCategoryId(text, draft.type);
+    draft.accountId = suggestAccountId(analysis);
+    draft.categoryId = suggestCategoryId(analysis, draft.type);
 
     const bits = [];
     if (draft.sender && draft.sender !== 'Message') bits.push(draft.sender);
@@ -2102,6 +2120,15 @@
     renderImportDrafts();
   }
 
+  // Once every card has been added or dismissed, empty the box so the same
+  // message cannot sit there refusing to re-parse.
+  function consumeImportTextIfDone() {
+    if (PF_IMPORT.drafts.length) return;
+    const box = $('#pf-import-text');
+    if (box) box.value = '';
+    PF_IMPORT.parsedFrom = '';
+  }
+
   function addImportDraft(index) {
     const draft = PF_IMPORT.drafts[index];
     if (!draft || draft.error) return false;
@@ -2115,6 +2142,7 @@
         note: draft.note,
       });
       PF_IMPORT.drafts.splice(index, 1);
+      consumeImportTextIfDone();
       renderImportDrafts();
       renderAll();
       toast(
@@ -2216,6 +2244,7 @@
       const dropBtn = e.target.closest('[data-pf-import-drop]');
       if (dropBtn) {
         PF_IMPORT.drafts.splice(Number(dropBtn.dataset.pfImportDrop), 1);
+        consumeImportTextIfDone();
         renderImportDrafts();
         return;
       }
@@ -2239,6 +2268,7 @@
           if (!PF_IMPORT.drafts[i].error && addImportDraft(i)) added += 1;
         }
         if (added) toast(`Imported ${added} ${added === 1 ? 'entry' : 'entries'} from messages.`);
+        consumeImportTextIfDone();
         renderImportDrafts();
       }
     });
@@ -2719,6 +2749,5 @@
     init();
   }
 
-  // Expose for debugging only; the app itself uses the module scope.
   window.PF = PF;
 })();
