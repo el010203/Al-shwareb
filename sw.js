@@ -11,13 +11,15 @@
      successful network response is cached for future offline use.
    ============================================================ */
 
-const CACHE_VERSION = 'al-shwareb-v10';
+const CACHE_VERSION = 'al-shwareb-v13';
 const CORE_ASSETS = [
   './',
   './index.html',
   './css/styles.css',
+  './css/pf.css',
   './js/storage.js',
   './js/app.js',
+  './js/pf.js',
   './manifest.webmanifest',
   './icons/favicon-32.png',
   './icons/icon-180.png',

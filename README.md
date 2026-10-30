@@ -29,11 +29,98 @@ percent on each transaction, and see total profit plus month-by-month profit.
   amount** for the profit, set an optional **date to receive**, mark payouts as
   **Received**, and inspect everything in **View history** (with status, profit-option,
   and search filters).
+- **Personal Finance tab (PF)** — a completely standalone module with its own storage
+  key, so nothing it records ever appears in People, Transactions, Finance or the
+  Dashboard. It documents **every income and every expense** (amount, date, account,
+  category, note), keeps **multiple accounts** (cash, bank, wallet, card, savings) with
+  automatic balances, holds **monthly budgets per category** with usage bars, and
+  supports **recurring entries** (weekly / monthly / yearly) that you confirm when due.
+  Entries can be filtered by month, type, account, category and free-text search.
 - **Filters** — view everything or narrow down by person and/or month.
 - **Edit & delete** any transaction or person.
 - **Backup / restore** — all data lives in your browser; export a `.json` backup file
   and import it again any time.
 - Zero dependencies, works fully offline, mobile-friendly.
+
+## Personal Finance (PF) tab
+
+The **Personal Finance** tab is a separate module inside the same page. It has its own
+data store (`alshwareb_pf_v1` in `localStorage`), its own currency label, its own backup
+file and its own erase button — the two halves of the app never read or write each
+other's data.
+
+- **Overview** — total balance across accounts, income / expenses / net for the chosen
+  month (with change vs last month and savings rate), a 6-month income-vs-expense chart,
+  account balances, budget progress and recent entries.
+- **Import from message** — paste (or copy) an InstaPay, Vodafone Cash, Etisalat Cash or
+  bank SMS and PF reads the amount, whether money came in or went out, the date, the
+  reference and any fee, then pre-fills an editable entry you confirm. Arabic and English
+  messages and Arabic-Indic digits are understood; paste several messages at once to add
+  them together. Parsing happens entirely on the device.
+- **Entries** — record income or expense with amount, date, account, category and an
+  optional note. Filter by month, type, account, category or search text; edit or delete
+  any entry. The account balance is shown after every save.
+- **Budgets** — set a monthly limit per expense category, see spent / limit and
+  remaining, copy the previous month's budgets forward, and spot spending that has no
+  budget yet.
+- **Accounts** — add or edit accounts (cash, bank, mobile wallet, card, savings, other)
+  with an opening balance; balances are derived from every entry. Categories can be
+  added or removed here (a category can only be removed when nothing uses it).
+- **Recurring** — define rent, salary or subscriptions and confirm them when due; PF
+  shows overdue counts and can post everything that is due in one tap. Nothing is ever
+  posted silently.
+
+### Importing InstaPay / Vodafone Cash messages
+
+Web apps cannot read SMS — no browser or PWA exposes an API for it, and iOS has no
+SMS API at all. So PF takes the message as *text* instead:
+
+1. Long-press the SMS on your phone → **Copy** (or forward/share it to yourself).
+2. Open **Personal Finance → Entries → Import from message** and paste it.
+3. PF shows what it understood — type, amount, date, account, category, note — with each
+   field editable. Tap **Add** (or **Add all** for a multi-message paste).
+
+What it recognises:
+
+- **Direction** — "you received" / "you sent", "تم استلام" / "تم تحويل" / "تم خصم",
+  credits, deposits, withdrawals, payments.
+- **Amount** — currency-tagged numbers (EGP, LE, جنيه, ج.م), ignoring balances, fees,
+  phone numbers, references and dates.
+- **Date** — `dd/mm/yyyy`, `yyyy-mm-dd`, `12 Oct 2026`, `12 اكتوبر 2026`, and the
+  year-first `yy-mm-dd` form Egyptian operators use (`26-10-28` → 28 Oct 2026). Readings
+  that land in the future are rejected in favour of the plausible one; today if absent.
+- **Layout** — multi-paragraph operator messages (amount line, then the date, reference
+  and an advert paragraph) are kept together as one message, and advert links such as
+  `vf.eg/vfcash?id=money_transfer` are ignored so their wording cannot be mistaken for
+  a transaction.
+- **Extras** — transaction reference, counterparty name or phone (`لرقم 01037222406`
+  becomes `phone 01037222406`), and any fee (`مصاريف الخدمة 1 جنيه`). The fee is shown as
+  a note rather than added to the amount, because operators usually debit it separately.
+- **Balances are ignored** — `رصيد حسابك ... الحالي 9.20` never becomes the amount.
+
+Example — this Vodafone Cash message:
+
+```
+تم تحويل 205 جنيه لرقم 01037222406 مصاريف الخدمة 1 جنيه رصيد حسابك فى فودافون كاش الحالي 9.20.
+تاريخ العملية 13:55 26-10-28 :
+رقم العملية 025177972025 :
+```
+is read as **expense · 205.00 EGP · 28 Oct 2026 · Cash · Other expense**, with the note
+`Vodafone Cash · phone 01037222406 · Ref 025177972025` and fee `1.00 EGP`.
+- Arabic-Indic digits (٤٥٠) are converted automatically.
+
+If a message format is not recognised, the card says so and offers to fill the form
+manually with the raw text as the note.
+
+**Why not fully automatic?** Reading SMS from a native Android app requires `READ_SMS`,
+which Google Play only grants to default-SMS-handler apps; sideloaded APKs that request
+it get Play Protect warnings. On Android, a future option is the Web Share Target API
+(share the SMS straight into the installed PWA); iOS Safari does not support it, which is
+why the paste box is the default path on both platforms.
+
+Use the **Month** selector in the PF top bar for Overview and Budgets, and
+**Settings** inside the tab to change the PF currency, export/import a PF-only backup
+(`pf-backup-YYYY-MM-DD.json`) or erase PF data without touching the rest of the app.
 
 ## How to run
 
@@ -144,7 +231,8 @@ delete the old icon. The old Worker can then be deleted from the dashboard.
 ## How your data is stored
 
 Everything is saved in the browser's `localStorage` on **this device and this
-browser only**. Clearing browser data will erase it, so use
+browser only**. The Personal Finance tab uses its own separate key, so its data is
+included only in **PF Settings → Export PF backup**, not in the main backup file. Clearing browser data will erase it, so use
 **Settings → Export backup** regularly and keep the `.json` file somewhere safe.
 Use **Import backup** to restore, or to move the data to another browser/device.
 
@@ -158,8 +246,10 @@ wrangler.toml          # Cloudflare Workers Static Assets config
 .wranglerignore        # files excluded from the Workers upload
 icons/                 # app icons (PWA, Apple touch icon, favicon)
 css/styles.css         # all styling (mobile/tablet-first, dark theme)
+css/pf.css             # Personal Finance tab styling (incl. message importer)
 js/storage.js          # data model, localStorage, profit calculations
 js/app.js              # screens, forms, rendering and events
+js/pf.js               # Personal Finance module (own data store, UI, SMS parser)
 ```
 
 When you change app files, bump `CACHE_VERSION` in `sw.js` so installed copies

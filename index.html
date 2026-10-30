@@ -17,6 +17,7 @@
   <meta name="description" content="Personal profit & documentation tracker with day-accurate monthly profit splits." />
 
   <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/pf.css" />
 </head>
 <body>
   <header class="app-header">
@@ -42,6 +43,7 @@
       <button class="tab" data-tab="transactions" role="tab">Transactions</button>
       <button class="tab" data-tab="people" role="tab">People</button>
       <button class="tab" data-tab="finance" role="tab">Finance</button>
+      <button class="tab" data-tab="pf" role="tab">Personal Finance</button>
     </nav>
   </header>
 
@@ -247,6 +249,336 @@
 
       <div id="fin-list"></div>
     </section>
+
+    <!-- ============ PERSONAL FINANCE (STANDALONE MODULE) ============ -->
+    <section id="tab-pf" class="tab-panel">
+      <div class="pf-topbar">
+        <div class="pf-subnav" role="tablist" aria-label="Personal Finance sections">
+          <button type="button" class="pf-subnav-btn active" data-pf-view="overview" role="tab" aria-selected="true">Overview</button>
+          <button type="button" class="pf-subnav-btn" data-pf-view="entries" role="tab" aria-selected="false">Entries</button>
+          <button type="button" class="pf-subnav-btn" data-pf-view="budgets" role="tab" aria-selected="false">Budgets</button>
+          <button type="button" class="pf-subnav-btn" data-pf-view="accounts" role="tab" aria-selected="false">Accounts</button>
+          <button type="button" class="pf-subnav-btn" data-pf-view="recurring" role="tab" aria-selected="false">Recurring</button>
+        </div>
+        <div class="pf-toolbar">
+          <div id="pf-month-field" class="pf-month-field">
+            <label for="pf-month">Month</label>
+            <select id="pf-month" class="select"></select>
+          </div>
+          <button type="button" id="pf-settings-btn" class="btn btn-ghost btn-sm">Settings</button>
+        </div>
+      </div>
+
+      <p class="pf-scope-note">
+        Personal Finance is a standalone module: its accounts, entries, budgets and
+        recurring items use their own storage and never mix with People, Transactions,
+        Finance or the Dashboard.
+      </p>
+
+      <!-- ---------- OVERVIEW ---------- -->
+      <div id="pf-view-overview" class="pf-view active">
+        <div id="pf-cards" class="cards"></div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Last 6 months</h2>
+            <div class="pf-legend">
+              <span><i class="pf-legend-dot income"></i>Income</span>
+              <span><i class="pf-legend-dot expense"></i>Expenses</span>
+            </div>
+          </div>
+          <div id="pf-chart" class="pf-chart"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Accounts</h2>
+            <button type="button" class="btn btn-ghost btn-sm" data-pf-goto="accounts">Manage</button>
+          </div>
+          <div id="pf-account-mini"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Budget progress</h2>
+            <button type="button" class="btn btn-ghost btn-sm" data-pf-goto="budgets">Open budgets</button>
+          </div>
+          <div id="pf-budget-mini"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Recent entries</h2>
+            <button type="button" class="btn btn-ghost btn-sm" data-pf-goto="entries">All entries</button>
+          </div>
+          <div id="pf-recent"></div>
+        </div>
+      </div>
+
+      <!-- ---------- ENTRIES ---------- -->
+      <div id="pf-view-entries" class="pf-view">
+        <details id="pf-import" class="panel form-panel pf-import">
+          <summary class="pf-import-summary-head">
+            <svg class="pf-import-icon" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
+              <path d="M4 5h16v11H8l-4 4V5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M8 9h8M8 12.5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="pf-import-head-text">
+              <span class="pf-import-title">Import from message</span>
+              <span class="pf-import-sub">Paste an InstaPay / Vodafone Cash SMS and PF reads the amount, direction and date for you</span>
+            </span>
+            <span class="pf-import-chevron" aria-hidden="true">›</span>
+          </summary>
+          <div class="pf-import-body">
+            <label class="pf-sr-only" for="pf-import-text">Message text</label>
+            <textarea id="pf-import-text" class="input" rows="4" spellcheck="false"
+              placeholder="Paste one message here — or several, separated by a blank line.&#10;&#10;e.g. You have received EGP 1,250.00 from AHMED via InstaPay. Ref: IP3847291045"></textarea>
+            <div class="pf-import-actions">
+              <button type="button" id="pf-import-clipboard" class="btn btn-secondary btn-sm">Paste from clipboard</button>
+              <button type="button" id="pf-import-clear" class="btn btn-ghost btn-sm">Clear</button>
+              <span class="hint pf-import-hint">Runs on this device only — the message is never uploaded.</span>
+            </div>
+            <div id="pf-import-summary" class="pf-import-summary" hidden></div>
+            <div id="pf-import-results"></div>
+          </div>
+        </details>
+
+        <div class="panel form-panel">
+          <h2 id="pf-entry-title">Add income or expense</h2>
+          <form id="pf-entry-form" novalidate>
+            <input type="hidden" id="pf-entry-id" />
+            <div class="form-grid">
+              <div class="field">
+                <label id="pf-entry-type-label">Type *</label>
+                <div class="seg-control" role="radiogroup" aria-labelledby="pf-entry-type-label">
+                  <button type="button" class="seg-btn" data-pf-type="income" role="radio" aria-checked="false">Income</button>
+                  <button type="button" class="seg-btn active" data-pf-type="expense" role="radio" aria-checked="true">Expense</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="pf-entry-amount">Amount *</label>
+                <div class="input-suffix input-suffix-wide">
+                  <input type="number" id="pf-entry-amount" class="input" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required />
+                  <span class="pf-cur">EGP</span>
+                </div>
+              </div>
+              <div class="field">
+                <label for="pf-entry-date">Date *</label>
+                <input type="date" id="pf-entry-date" class="input" required />
+              </div>
+              <div class="field">
+                <label for="pf-entry-account">Account *</label>
+                <select id="pf-entry-account" class="select"></select>
+              </div>
+              <div class="field">
+                <label for="pf-entry-category">Category *</label>
+                <select id="pf-entry-category" class="select"></select>
+              </div>
+              <div class="field">
+                <label for="pf-entry-note">Note</label>
+                <input type="text" id="pf-entry-note" class="input" maxlength="200" placeholder="What was it for?" />
+              </div>
+            </div>
+            <div class="form-footer">
+              <div class="profit-preview">
+                Signed amount: <strong id="pf-entry-preview">—</strong>
+              </div>
+              <div class="form-actions">
+                <button type="button" id="pf-entry-cancel" class="btn btn-ghost" hidden>Cancel</button>
+                <button type="submit" class="btn btn-primary" id="pf-entry-submit">Add expense</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="filter-bar">
+          <div class="filter-group">
+            <label for="pf-filter-month">Month</label>
+            <select id="pf-filter-month" class="select"></select>
+          </div>
+          <div class="filter-group">
+            <label for="pf-filter-type">Type</label>
+            <select id="pf-filter-type" class="select">
+              <option value="all">All types</option>
+              <option value="income">Income</option>
+              <option value="expense">Expenses</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="pf-filter-account">Account</label>
+            <select id="pf-filter-account" class="select"></select>
+          </div>
+          <div class="filter-group">
+            <label for="pf-filter-category">Category</label>
+            <select id="pf-filter-category" class="select"></select>
+          </div>
+          <div class="filter-group">
+            <label for="pf-filter-search">Search</label>
+            <input type="search" id="pf-filter-search" class="input" placeholder="Note, category, amount…" />
+          </div>
+        </div>
+
+        <div id="pf-filter-summary" class="pf-summary-strip"></div>
+        <div id="pf-entries-list"></div>
+      </div>
+
+      <!-- ---------- BUDGETS ---------- -->
+      <div id="pf-view-budgets" class="pf-view">
+        <div id="pf-budget-cards" class="cards"></div>
+
+        <div class="panel form-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Set a monthly limit</h2>
+              <p class="hint" style="margin-top:2px">Budgets apply to <strong id="pf-budget-month-label">—</strong> only.</p>
+            </div>
+            <button type="button" id="pf-budget-copy" class="btn btn-ghost btn-sm" hidden>Copy previous month</button>
+          </div>
+          <form id="pf-budget-form" class="pf-inline-form" novalidate>
+            <div class="field">
+              <label for="pf-budget-category">Expense category</label>
+              <select id="pf-budget-category" class="select"></select>
+            </div>
+            <div class="field">
+              <label for="pf-budget-limit">Monthly limit</label>
+              <div class="input-suffix input-suffix-wide">
+                <input type="number" id="pf-budget-limit" class="input" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required />
+                <span class="pf-cur">EGP</span>
+              </div>
+            </div>
+            <div class="field pf-inline-submit">
+              <label>&nbsp;</label>
+              <button type="submit" class="btn btn-primary">Save budget</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Budgets</h2></div>
+          <div id="pf-budget-list"></div>
+        </div>
+      </div>
+
+      <!-- ---------- ACCOUNTS & CATEGORIES ---------- -->
+      <div id="pf-view-accounts" class="pf-view">
+        <div class="panel form-panel">
+          <h2 id="pf-account-title">Add account</h2>
+          <form id="pf-account-form" novalidate>
+            <div class="form-grid">
+              <div class="field">
+                <label for="pf-account-name">Name *</label>
+                <input type="text" id="pf-account-name" class="input" maxlength="40" placeholder="Cash, Bank, Wallet…" required />
+              </div>
+              <div class="field">
+                <label for="pf-account-type">Type</label>
+                <select id="pf-account-type" class="select"></select>
+              </div>
+              <div class="field">
+                <label for="pf-account-opening">Opening balance</label>
+                <div class="input-suffix input-suffix-wide">
+                  <input type="number" id="pf-account-opening" class="input" step="0.01" inputmode="decimal" placeholder="0.00" />
+                  <span class="pf-cur">EGP</span>
+                </div>
+                <p class="hint">What the account holds before any PF entries.</p>
+              </div>
+            </div>
+            <div class="form-footer">
+              <span class="muted">Balances update automatically from every entry.</span>
+              <div class="form-actions">
+                <button type="button" id="pf-account-cancel" class="btn btn-ghost" hidden>Cancel</button>
+                <button type="submit" id="pf-account-submit" class="btn btn-primary">Add account</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div id="pf-account-list" class="pf-account-list"></div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Categories</h2></div>
+          <form id="pf-category-form" class="pf-inline-form" novalidate>
+            <div class="field">
+              <label for="pf-category-name">New category</label>
+              <input type="text" id="pf-category-name" class="input" maxlength="40" placeholder="e.g. Education" required />
+            </div>
+            <div class="field">
+              <label for="pf-category-kind">Type</label>
+              <select id="pf-category-kind" class="select">
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+              </select>
+            </div>
+            <div class="field pf-inline-submit">
+              <label>&nbsp;</label>
+              <button type="submit" class="btn btn-secondary">Add category</button>
+            </div>
+          </form>
+          <div id="pf-category-list" class="pf-category-list"></div>
+          <p class="hint">A category can be removed only when no entry, budget or recurring item uses it.</p>
+        </div>
+      </div>
+
+      <!-- ---------- RECURRING ---------- -->
+      <div id="pf-view-recurring" class="pf-view">
+        <div class="panel form-panel">
+          <h2 id="pf-rule-title">Add a recurring entry</h2>
+          <form id="pf-rule-form" novalidate>
+            <div class="form-grid">
+              <div class="field">
+                <label id="pf-rule-type-label">Type *</label>
+                <div class="seg-control" role="radiogroup" aria-labelledby="pf-rule-type-label">
+                  <button type="button" class="seg-btn" data-pf-rule-type="income" role="radio" aria-checked="false">Income</button>
+                  <button type="button" class="seg-btn active" data-pf-rule-type="expense" role="radio" aria-checked="true">Expense</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="pf-rule-amount">Amount *</label>
+                <div class="input-suffix input-suffix-wide">
+                  <input type="number" id="pf-rule-amount" class="input" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required />
+                  <span class="pf-cur">EGP</span>
+                </div>
+              </div>
+              <div class="field">
+                <label for="pf-rule-account">Account *</label>
+                <select id="pf-rule-account" class="select"></select>
+              </div>
+              <div class="field">
+                <label for="pf-rule-category">Category *</label>
+                <select id="pf-rule-category" class="select"></select>
+              </div>
+              <div class="field">
+                <label for="pf-rule-frequency">Repeats</label>
+                <select id="pf-rule-frequency" class="select"></select>
+              </div>
+              <div class="field">
+                <label for="pf-rule-start">First occurrence *</label>
+                <input type="date" id="pf-rule-start" class="input" required />
+              </div>
+              <div class="field field-full">
+                <label for="pf-rule-note">Note</label>
+                <input type="text" id="pf-rule-note" class="input" maxlength="200" placeholder="Rent, salary, subscription…" />
+              </div>
+            </div>
+            <div class="form-footer">
+              <span class="muted">Nothing is posted automatically — you confirm each due entry.</span>
+              <div class="form-actions">
+                <button type="button" id="pf-rule-cancel" class="btn btn-ghost" hidden>Cancel</button>
+                <button type="submit" id="pf-rule-submit" class="btn btn-primary">Add recurring entry</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Recurring entries</h2>
+            <button type="button" id="pf-post-due" class="btn btn-secondary btn-sm">Nothing due</button>
+          </div>
+          <div id="pf-recurring-list"></div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <!-- ============ SETTINGS MODAL ============ -->
@@ -341,6 +673,43 @@
     </div>
   </div>
 
+
+  <!-- ============ PERSONAL FINANCE SETTINGS MODAL ============ -->
+  <div id="modal-pf-settings" class="modal" hidden>
+    <div class="modal-backdrop" data-pf-close-settings></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pf-settings-title">
+      <div class="modal-head">
+        <h2 id="pf-settings-title">Personal Finance settings</h2>
+        <button type="button" class="icon-btn" data-pf-close-settings aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="pf-set-currency">PF currency label</label>
+          <input type="text" id="pf-set-currency" class="input" maxlength="8" placeholder="EGP" />
+          <p class="hint">Used only inside Personal Finance — the rest of the app keeps its own currency.</p>
+        </div>
+
+        <hr class="divider" />
+
+        <h3>Backup &amp; restore (PF only)</h3>
+        <p class="hint">The file holds only Personal Finance data: accounts, entries, budgets and recurring items.</p>
+        <div class="btn-row">
+          <button type="button" id="pf-export" class="btn btn-secondary">Export PF backup</button>
+          <button type="button" id="pf-import" class="btn btn-secondary">Import PF backup</button>
+          <input type="file" id="pf-import-file" accept="application/json,.json" hidden />
+        </div>
+
+        <hr class="divider" />
+
+        <h3>Danger zone</h3>
+        <div class="btn-row">
+          <button type="button" id="pf-erase" class="btn btn-danger">Erase PF data</button>
+        </div>
+        <p class="hint">Clears Personal Finance only. People, Transactions, Finance and Dashboard are untouched.</p>
+      </div>
+    </div>
+  </div>
+
   <div id="offline-banner" class="offline-banner" hidden>
     <span class="offline-dot"></span>
     <span class="offline-text">Offline — using saved data on this device</span>
@@ -351,6 +720,7 @@
 
   <script src="js/storage.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/pf.js"></script>
   <script>
     // Enable offline use / installability. Ignored on browsers without SW support.
     if ('serviceWorker' in navigator) {
