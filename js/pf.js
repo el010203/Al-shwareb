@@ -2740,7 +2740,8 @@
     const exportBtn = $('#pf-export');
     if (exportBtn) exportBtn.addEventListener('click', exportBackup);
 
-    const importBtn = $('#pf-import');
+    // Backup import is distinct from the message-import panel (#pf-import).
+    const importBtn = $('#pf-backup-import');
     const importFile = $('#pf-import-file');
     if (importBtn && importFile) {
       importBtn.addEventListener('click', () => importFile.click());
