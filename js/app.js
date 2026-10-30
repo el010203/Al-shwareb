@@ -452,6 +452,10 @@ function openSettings() {
   const count = Store.data.transactions.length;
   const finCount = Store.data.finance.length;
   $('#storage-note').textContent = `Currently stored on this device: ${Store.data.people.length} people, ${count} transaction${count === 1 ? '' : 's'}, ${finCount} finance entr${finCount === 1 ? 'y' : 'ies'}.`;
+  const pf = window.PF?.data;
+  $('#backup-contents').textContent = pf
+    ? `Build 21 · Included in a new backup: ${pf.entries.length} PF entries, ${pf.accounts.length} accounts, ${pf.budgets.length} budgets and ${pf.recurring.length} recurring items, plus People, Transactions and Finance.`
+    : 'Personal Finance is still loading. Wait before exporting.';
   $('#modal-settings').hidden = false;
   renderStorageStatus();
 }
@@ -518,17 +522,25 @@ function closeSettings() {
 }
 
 function exportBackup() {
-  const blob = new Blob([window.AppBackup.exportData()], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const stamp = new Date().toISOString().slice(0, 10);
-  a.href = url;
-  a.download = `al-shwareb-backup-${stamp}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  toast('Backup file downloaded.');
+  try {
+    const raw = Store.exportData();
+    const info = window.AppBackup.inspectData(raw);
+    const blob = new Blob([raw], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    // Distinguish multiple exports on the same day from an older main-only file.
+    const stamp = new Date().toISOString().slice(0, 19).replace('T', '-').replace(/:/g, '');
+    a.href = url;
+    a.download = `al-shwareb-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Give Safari time to consume the download before releasing its Blob URL.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast(`Backup file downloaded. ${info.summary}`);
+  } catch (err) {
+    toast(err.message || 'Could not export the backup. Please try again.', true);
+  }
 }
 
 /* ============================================================

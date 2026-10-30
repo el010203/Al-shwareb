@@ -167,7 +167,7 @@ test('shared export button downloads a whole-app backup and shared import update
   w.URL.revokeObjectURL = () => {};
   w.HTMLAnchorElement.prototype.click = function() { filename = this.download; };
   w.document.getElementById('btn-export').click();
-  assert.match(filename, /^al-shwareb-backup-\d{4}-\d{2}-\d{2}\.json$/);
+  assert.match(filename, /^al-shwareb-backup-\d{4}-\d{2}-\d{2}-\d{6}\.json$/);
   const text = await new Promise((resolve, reject) => {
     const reader = new w.FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsText(downloadedBlob);
   });
@@ -196,4 +196,107 @@ test('legacy month-based transactions still migrate through shared restore', asy
   backup.importData(JSON.stringify(old));
   assert.equal(store.data.transactions[0].startDate, '2025-06-01');
   assert.equal(store.data.transactions[0].months, 1);
+});
+
+test('legacy UI export API also includes PF, and its restore API restores both stores', async t => {
+  const { store, pf } = await setup(t);
+  // Older cached app.js calls these public Store methods, not AppBackup directly.
+  const json = store.exportData();
+  const saved = JSON.parse(json);
+  assert.equal(saved.app, 'al-shwareb');
+  assert.equal(saved.data.personalFinance.entries.length, 1);
+  store.eraseAll(); pf.eraseAll();
+  store.importData(json);
+  assert.deepEqual(clone(store.data), saved.data.main);
+  assert.deepEqual(clone(pf.data), saved.data.personalFinance);
+});
+
+test('Store restore accepts the unified file instead of rejecting or ignoring its PF section', async t => {
+  const { store, pf, backup } = await setup(t);
+  const json = backup.exportData();
+  pf.eraseAll();
+  store.importData(json);
+  assert.equal(pf.data.entries.length, 1);
+});
+
+test('restored historical PF data selects a populated month, not an empty current month', async t => {
+  const { w, backup } = await setup(t);
+  const saved = JSON.parse(backup.exportData());
+  saved.data.personalFinance.entries[0].date = '2021-04-15';
+  saved.data.personalFinance.budgets[0].month = '2021-04';
+  backup.importData(JSON.stringify(saved));
+  assert.equal(w.document.getElementById('pf-month').value, '2021-04');
+  assert.match(w.document.getElementById('pf-cards').textContent, /65\.00/);
+});
+
+test('export and restore diagnostics report actual PF counts and warn about missing PF', async t => {
+  const { w, store, backup } = await setup(t);
+  const file = backup.exportData();
+  const info = backup.inspectData(file);
+  assert.equal(info.counts.pfEntries, 1);
+  assert.equal(info.counts.pfAccounts, 3);
+  assert.equal(info.counts.pfBudgets, 1);
+  assert.equal(info.counts.pfRecurring, 1);
+  assert.match(info.confirmation, /Personal Finance: 1 entries, 3 accounts/);
+  assert.match(info.success, /Personal Finance: 1 entries/);
+  assert.deepEqual(JSON.parse(file).summary, clone(info.counts));
+  const legacy = backup.inspectData(JSON.stringify(store.data));
+  assert.equal(legacy.counts.pfEntries, null);
+  assert.match(legacy.confirmation, /NO Personal Finance data in this file/);
+  assert.match(legacy.confirmation, /cannot be restored from it/);
+  w.document.getElementById('open-settings').click();
+  assert.match(w.document.getElementById('backup-contents').textContent, /1 PF entries, 3 accounts/);
+});
+
+test('public backup APIs fail closed if the shared backup module is missing', async t => {
+  const context = await setup(t);
+  const before = snapshot(context);
+  const json = context.backup.exportData();
+  context.w.AppBackup = undefined;
+  assert.throws(() => context.store.exportData(), /Backup tools are still updating/);
+  assert.throws(() => context.store.importData(json), /Backup tools are still updating/);
+  assert.deepEqual(snapshot(context), before);
+  let downloaded = false;
+  context.w.URL.createObjectURL = () => { downloaded = true; return 'blob:partial'; };
+  context.w.document.getElementById('btn-export').click();
+  assert.equal(downloaded, false, 'Never silently create a main-only file');
+  assert.match(context.w.document.getElementById('toast').textContent, /Backup tools are still updating/);
+});
+
+test('PF records restore on a different fresh app instance and survive reload from storage', async t => {
+  const source = await setup(t);
+  const file = source.backup.exportData();
+  const target = await setup(t);
+  target.store.eraseAll();
+  target.pf.eraseAll();
+  const before = target.pf.data.accounts[0].id;
+  target.store.importData(file);
+  target.store.load();
+  target.pf.load();
+  assert.notEqual(target.pf.data.accounts[0].id, before);
+  assert.deepEqual(clone(target.pf.data), clone(source.pf.data));
+  assert.deepEqual(clone(target.store.data), clone(source.store.data));
+});
+
+test('HTML asset versions match precache entries, so old cache keys cannot serve legacy scripts', async () => {
+  const worker = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
+  const release = worker.match(/CACHE_VERSION = 'al-shwareb-v(\d+)'/)[1];
+  const doc = new JSDOM(html).window.document;
+  const assets = [...doc.querySelectorAll('script[src], link[rel="stylesheet"]')].map(el => el.getAttribute('src') || el.getAttribute('href'));
+  for (const path of assets) {
+    assert.equal(new URL(path, 'https://example.test').searchParams.get('v'), release);
+    assert.ok(worker.includes(`'./${path}'`), `Precache must include ${path} for offline startup`);
+  }
+  doc.defaultView.close();
+});
+
+test('restore recomputes PF counts and warns before importing an empty PF section', async t => {
+  const { backup } = await setup(t);
+  const saved = JSON.parse(backup.exportData());
+  saved.summary.pfEntries = 900;
+  saved.data.personalFinance.entries = [];
+  const info = backup.inspectData(JSON.stringify(saved));
+  assert.equal(info.counts.pfEntries, 0);
+  assert.match(info.confirmation, /This file has no PF income\/expense entries/);
+  assert.match(info.confirmation, /cancel and export a fresh backup/);
 });

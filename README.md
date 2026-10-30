@@ -299,7 +299,7 @@ delete the old icon. The old Worker can then be deleted from the dashboard.
 
 Everything is saved in the browser's `localStorage` on **this device and this
 browser only**. **Settings → Export all data (.json)** creates one
-`al-shwareb-backup-YYYY-MM-DD.json` containing People, Transactions, Finance,
+`al-shwareb-backup-YYYY-MM-DD-HHMMSS.json` containing People, Transactions, Finance,
 and all Personal Finance accounts, categories, entries, budgets, recurring rules,
 opening balances and both currency settings. The versioned file contains
 `data.main` and `data.personalFinance`; the stores remain independent during normal
@@ -374,3 +374,32 @@ Chromium viewport tests are not a substitute for testing Safari on an actual
 phone/iPad. After deploying, also check Safari date pickers, portrait/landscape,
 the on-screen keyboard, and the Home Screen app's safe-area spacing. Never clear
 site data to update the app: that would erase locally stored finance records.
+
+
+### If Personal Finance looks missing after restore
+
+- Both the main Settings backup buttons and the older `Store.exportData()` /
+  `Store.importData()` entry points use the same whole-app backup coordinator.
+  A missing shared backup module reports an update error rather than quietly
+  exporting a main-only file.
+- Settings shows current PF record counts; export and restore messages show the
+  file's PF entries, accounts, categories, budgets and recurring-item counts.
+  File summaries are informational: restore counts are recomputed from the data.
+- A legacy main-only file explicitly says **NO Personal Finance data in this file**.
+  It preserves existing PF records, but **cannot recover records that were never
+  included in that file**. Export a fresh backup from the device/origin where the
+  records still exist. Do not erase local records while investigating.
+- Restore selects the most recent month represented by PF entries (or budgets
+  when there are no entries), rather than opening a misleading empty current month.
+  The Entries view also resets to All months.
+- New release assets carry `?v=21` in HTML and the service-worker precache to prevent
+  old unversioned JavaScript from overriding new backup code. For future releases,
+  bump the HTML asset queries and their precache URLs together with `CACHE_VERSION`.
+  An automated test checks they match. Reopen/reload online after deployment;
+  **never clear site data as an update step**.
+
+For an end-to-end backup test, set `CHROMIUM_PATH` as described above, then run
+`npm run test:backup-browser`. It downloads an actual JSON file through the UI,
+restores via the file picker/FileReader on a separate fresh browser context,
+checks PF IDs/records and historical totals, and reloads offline to verify that
+restored data persists. It uses only synthetic test records.

@@ -5,6 +5,37 @@
   const VERSION = 1;
   const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 
+  function counts(plan) {
+    const main = plan.main;
+    const pf = plan.personalFinance;
+    return {
+      people: main ? main.people.length : null,
+      transactions: main ? main.transactions.length : null,
+      finance: main ? main.finance.length : null,
+      pfEntries: pf ? pf.entries.length : null,
+      pfAccounts: pf ? pf.accounts.length : null,
+      pfCategories: pf ? pf.categories.length : null,
+      pfBudgets: pf ? pf.budgets.length : null,
+      pfRecurring: pf ? pf.recurring.length : null,
+    };
+  }
+  function describePF(stats) {
+    if (stats.pfEntries === null) return 'NO Personal Finance data in this file. PF cannot be restored from it; existing PF data will be kept.';
+    return `Personal Finance: ${stats.pfEntries} entries, ${stats.pfAccounts} accounts, ${stats.pfCategories} categories, ${stats.pfBudgets} budgets, ${stats.pfRecurring} recurring items.`;
+  }
+  function details(plan) {
+    const stats = counts(plan);
+    const emptyWarning = stats.pfEntries === 0
+      ? '\n\nThis file has no PF income/expense entries. If you expected records, cancel and export a fresh backup from the device that still has them.'
+      : '';
+    return {
+      scope: plan.scope, counts: stats,
+      summary: describePF(stats),
+      confirmation: `${plan.confirmation}\n\n${describePF(stats)}${emptyWarning}`,
+      success: `${plan.success} ${describePF(stats)}`,
+    };
+  }
+
   function prepare(raw) {
     let obj;
     try { obj = JSON.parse(raw); }
@@ -51,12 +82,13 @@
       if (!Store.data || !window.PF?.data) throw new Error('App data is still loading. Please try again.');
       return JSON.stringify({
         app: APP, version: VERSION, exportedAt: new Date().toISOString(),
+        summary: counts({ main: Store.data, personalFinance: window.PF.data }),
         data: { main: Store.data, personalFinance: window.PF.data },
       }, null, 2);
     },
     inspectData(raw) {
       const plan = prepare(raw);
-      return { scope: plan.scope, confirmation: plan.confirmation, success: plan.success };
+      return details(plan);
     },
     importData(raw) {
       // Validate both modules before changing either. A malformed PF section must
@@ -88,7 +120,7 @@
       // In-memory stores are updated only after every storage write succeeds.
       for (const { store, next } of changes) store.data = next;
       if (plan.personalFinance) window.PF.refreshAfterRestore();
-      return { scope: plan.scope };
+      return details(plan);
     },
   };
 })();
