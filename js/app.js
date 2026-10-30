@@ -518,7 +518,7 @@ function closeSettings() {
 }
 
 function exportBackup() {
-  const blob = new Blob([Store.exportData()], { type: 'application/json' });
+  const blob = new Blob([window.AppBackup.exportData()], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const stamp = new Date().toISOString().slice(0, 10);
@@ -1222,8 +1222,9 @@ function bindEvents() {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        if (!confirm('Importing will replace ALL current data. Continue?')) return;
-        Store.importData(String(reader.result));
+        const info = window.AppBackup.inspectData(String(reader.result));
+        if (!confirm(info.confirmation)) return;
+        window.AppBackup.importData(String(reader.result));
         state.dashPerson = 'all';
         state.filterPerson = 'all';
         state.filterMonth = 'all';
@@ -1238,7 +1239,9 @@ function bindEvents() {
         resetFinForm();
         renderAll();
         closeSettings();
-        toast('Backup restored.');
+        closeHistory();
+        closeFinanceHistory();
+        toast(info.success);
       } catch (err) {
         toast(err.message, true);
       }

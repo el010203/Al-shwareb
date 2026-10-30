@@ -27,6 +27,7 @@ const MAX_MONTHS = 60;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const Store = {
+  storageKey: DB_KEY,
   data: null,
 
   /* ---------- persistence ---------- */
@@ -584,24 +585,38 @@ const Store = {
     return JSON.stringify(this.data, null, 2);
   },
 
-  importData(jsonText) {
+  // Pure validation/normalisation: shared restore validates every module first.
+  prepareImport(raw) {
     let obj;
     try {
-      obj = JSON.parse(jsonText);
+      obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
     } catch {
       throw new Error('That file is not a valid backup (.json).');
     }
-    if (!obj || !Array.isArray(obj.people) || !Array.isArray(obj.transactions) || !obj.meta) {
+    if (!obj || !Array.isArray(obj.people) || !Array.isArray(obj.transactions) ||
+        !obj.meta || typeof obj.meta !== 'object' || Array.isArray(obj.meta) ||
+        obj.people.some((p) => !p || !p.id || typeof p.name !== 'string') ||
+        obj.transactions.some((tx) => !tx || !tx.id || typeof tx !== 'object') ||
+        ('finance' in obj && !Array.isArray(obj.finance))) {
       throw new Error('The file does not look like an Al-shwareb backup.');
     }
+    if (Number(obj.meta.version) > 4) throw new Error('This app backup version is not supported.');
     const rawFinance = Array.isArray(obj.finance) ? obj.finance : [];
-    this.data = {
-      meta: { version: 4, currency: obj.meta.currency || 'EGP', createdAt: obj.meta.createdAt || new Date().toISOString() },
-      people: obj.people,
+    if (rawFinance.some((f) => !f || typeof f !== 'object')) {
+      throw new Error('The backup contains invalid Finance records.');
+    }
+    return {
+      meta: { version: 4, currency: String(obj.meta.currency || 'EGP'), createdAt: obj.meta.createdAt || new Date().toISOString() },
+      people: JSON.parse(JSON.stringify(obj.people)),
       transactions: obj.transactions.map((tx) => this.normalizeTx(tx)),
       finance: rawFinance.map((f) => this.normalizeFinance(f)),
     };
-    this.save();
+  },
+
+  importData(jsonText) {
+    const next = this.prepareImport(jsonText);
+    localStorage.setItem(DB_KEY, JSON.stringify(next));
+    this.data = next;
   },
 
   eraseAll() {

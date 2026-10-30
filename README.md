@@ -60,9 +60,9 @@ keys/bindings, privacy details and device instructions. Build Pages with
 ## Personal Finance (PF) tab
 
 The **Personal Finance** tab is a separate module inside the same page. It has its own
-data store (`alshwareb_pf_v1` in `localStorage`), its own currency label, its own backup
-file and its own erase button — the two halves of the app never read or write each
-other's data.
+data store (`alshwareb_pf_v1` in `localStorage`), currency label and erase button.
+Its records and calculations remain independent. **Backup/restore is shared**:
+the main header's Settings exports one file containing both data stores.
 
 - **Overview** — total balance across accounts, income / expenses / net for the chosen
   month (with change vs last month and savings rate), a 6-month income-vs-expense chart,
@@ -156,8 +156,9 @@ it get Play Protect warnings. On Android, a future option is the Web Share Targe
 why the paste box is the default path on both platforms.
 
 Use the **Month** selector in the PF top bar for Overview and Budgets, and
-**Settings** inside the tab to change the PF currency, export/import a PF-only backup
-(`pf-backup-YYYY-MM-DD.json`) or erase PF data without touching the rest of the app.
+**Settings** inside the tab to change the PF currency, manage reminder permissions,
+or erase PF data without touching the rest of the app. For backup/restore, use the
+main header's **Settings → Export all data (.json) / Import backup**.
 
 ### Bank AlAhly messages
 
@@ -297,10 +298,27 @@ delete the old icon. The old Worker can then be deleted from the dashboard.
 ## How your data is stored
 
 Everything is saved in the browser's `localStorage` on **this device and this
-browser only**. The Personal Finance tab uses its own separate key, so its data is
-included only in **PF Settings → Export PF backup**, not in the main backup file. Clearing browser data will erase it, so use
-**Settings → Export backup** regularly and keep the `.json` file somewhere safe.
-Use **Import backup** to restore, or to move the data to another browser/device.
+browser only**. **Settings → Export all data (.json)** creates one
+`al-shwareb-backup-YYYY-MM-DD.json` containing People, Transactions, Finance,
+and all Personal Finance accounts, categories, entries, budgets, recurring rules,
+opening balances and both currency settings. The versioned file contains
+`data.main` and `data.personalFinance`; the stores remain independent during normal
+use. Clearing browser data erases local records, so keep a current backup safely.
+
+Use the same **Import backup** button to restore or move data to another device.
+A current whole-app backup replaces both stores after confirmation. Both sections
+are validated before either is changed; failed storage writes attempt rollback and
+report failure rather than success. Malformed/incomplete/future-version files are
+rejected. Existing message drafts and PF edits are cleared after a PF restore.
+
+Older main-app backups are accepted and **keep current PF data**; older PF-only
+backups are also accepted through the same button and **keep main records**. The
+confirmation explains which records will be replaced. Separate PF export/import
+controls are no longer present.
+
+Notification permissions, push subscriptions and their device-management tokens
+are device-specific, not financial records, and are **not** copied into backups.
+Enable reminders separately on each phone after moving to a new device.
 
 ## Project structure
 
@@ -315,8 +333,44 @@ css/styles.css         # all styling (mobile/tablet-first, dark theme)
 css/pf.css             # Personal Finance tab styling (incl. message importer)
 js/storage.js          # data model, localStorage, profit calculations
 js/app.js              # screens, forms, rendering and events
+js/backup.js           # shared whole-app backup, legacy restore and write rollback
 js/pf.js               # Personal Finance module (own data store, UI, SMS parser)
 ```
 
 When you change app files, bump `CACHE_VERSION` in `sw.js` so installed copies
 pick up the update.
+
+## Mobile and tablet layout checks
+
+The layout adapts to narrow phones, tablet portrait/landscape and iPad split-view
+widths. Phone navigation wraps so no section is hidden off-screen; forms use one
+column on phones and two on tablets. Dense tables become labelled cards on phones
+and stay horizontally scrollable inside their own panels on wider screens.
+Inputs use 16px text to avoid Safari's small-input focus zoom, touch controls have
+larger targets, and dialogs scroll with their close button remaining visible.
+
+Run the normal regression tests with `npm test`. For real Chromium layout tests,
+point `CHROMIUM_PATH` at a locally installed Chrome or Chromium executable:
+
+```powershell
+# Windows PowerShell — adjust if Chrome is installed elsewhere.
+$env:CHROMIUM_PATH = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+npm run test:responsive
+```
+
+```sh
+# Linux — adjust to your installed browser.
+CHROMIUM_PATH=/usr/bin/chromium npm run test:responsive
+```
+
+The browser test starts its own local static server, seeds synthetic test records,
+and checks ten viewports from 320px phones through 1366px tablets. It checks every
+main tab, PF subviews, message previews, long names/large amounts, input sizes,
+file-picker isolation and scrollable history/settings dialogs. It never reads or
+changes a user's real browser data. Set `SCREENSHOT_DIR` to a temporary directory
+if screenshots are wanted; don't commit generated screenshots.
+
+Chromium viewport tests are not a substitute for testing Safari on an actual
+phone/iPad. After deploying, also check Safari date pickers, portrait/landscape,
+the on-screen keyboard, and the Home Screen app's safe-area spacing. Never clear
+site data to update the app: that would erase locally stored finance records.

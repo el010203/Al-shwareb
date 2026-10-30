@@ -344,6 +344,7 @@
   /* ---------------- store ---------------- */
 
   const PF = {
+    storageKey: PF_KEY,
     data: null,
 
     load() {
@@ -356,7 +357,7 @@
       let parsed = null;
       if (raw) {
         try {
-          parsed = JSON.parse(raw);
+          parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
         } catch (err) {
           console.warn('PF: stored data was not valid JSON', err);
         }
@@ -772,24 +773,69 @@
         2
       );
     },
-    importData(raw) {
+    prepareImport(raw) {
       let parsed;
       try {
-        parsed = JSON.parse(raw);
+        parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       } catch (err) {
         throw new Error('That file is not valid JSON.');
       }
       const data = parsed && parsed.data ? parsed.data : parsed;
+      if ((parsed && parsed.app === 'al-shwareb-pf' && parsed.version !== PF_VERSION) ||
+          (data && data.meta && Number(data.meta.version) > PF_VERSION)) {
+        throw new Error('This Personal Finance backup version is not supported.');
+      }
       if (
         !data ||
         !Array.isArray(data.accounts) ||
         !Array.isArray(data.entries) ||
-        !Array.isArray(data.categories)
+        !Array.isArray(data.categories) ||
+        ('budgets' in data && !Array.isArray(data.budgets)) ||
+        ('recurring' in data && !Array.isArray(data.recurring)) ||
+        (data.meta && (typeof data.meta !== 'object' || Array.isArray(data.meta))) ||
+        ['accounts', 'categories', 'entries', 'budgets', 'recurring'].some((key) =>
+          Array.isArray(data[key]) && data[key].some((item) => !item || typeof item !== 'object'))
       ) {
         throw new Error('This is not a Personal Finance backup file.');
       }
-      this.data = normalizeData(data);
-      this.save();
+      // Reject broken records rather than silently dropping them during restore.
+      const accountIds = new Set(data.accounts.map(a => String(a.id)));
+      const categories = new Map(data.categories.map(c => [String(c.id), c]));
+      const validAmount = amount => Number.isFinite(Number(amount)) && Number(amount) > 0;
+      const linked = item => accountIds.has(String(item.accountId)) &&
+        categories.get(String(item.categoryId))?.kind === item.type;
+      const broken = data.accounts.some(a => !a.id || !a.name || !Number.isFinite(Number(a.opening || 0))) ||
+        data.categories.some(c => !c.id || !c.name || !['income', 'expense'].includes(c.kind)) ||
+        data.entries.some(e => !e.id || !['income', 'expense'].includes(e.type) || !validAmount(e.amount) || !isRealDate(e.date) || !linked(e)) ||
+        (data.budgets || []).some(b => !isRealMonth(b.month) || !validAmount(b.limit) || categories.get(String(b.categoryId))?.kind !== 'expense') ||
+        (data.recurring || []).some(r => !r.id || !['income', 'expense'].includes(r.type) || !validAmount(r.amount) ||
+          !isRealDate(r.startDate) || !FREQUENCIES.some(f => f[0] === r.frequency) || !linked(r) ||
+          (r.lastPosted != null && !isRealDate(r.lastPosted)));
+      const duplicates = ['accounts', 'categories', 'entries', 'recurring'].some(key => {
+        const rows = data[key] || [];
+        return new Set(rows.map(row => String(row.id))).size !== rows.length;
+      });
+      if (broken || duplicates) throw new Error('The Personal Finance backup contains invalid records. No data was restored.');
+      return normalizeData(data);
+    },
+    importData(raw) {
+      const next = this.prepareImport(raw);
+      localStorage.setItem(PF_KEY, JSON.stringify(next));
+      this.data = next;
+    },
+    refreshAfterRestore() {
+      PF_STATE.month = nowMonth();
+      PF_STATE.filters = { month: 'all', type: 'all', accountId: 'all', categoryId: 'all', q: '' };
+      PF_IMPORT.drafts = [];
+      PF_IMPORT.parsedFrom = '';
+      const box = $('#pf-import-text');
+      if (box) box.value = '';
+      resetEntryForm(true);
+      resetAccountForm();
+      resetRuleForm(true);
+      renderImportDrafts();
+      renderAll();
+      closeSettings();
     },
     eraseAll() {
       this.data = normalizeData(defaultData());
@@ -1564,18 +1610,6 @@
     $('#modal-pf-settings').hidden = true;
   }
 
-  function exportBackup() {
-    const blob = new Blob([PF.exportData()], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pf-backup-${todayISO()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    toast('Personal Finance backup exported.');
-  }
 
   /* ------------------------------------------------------------
      Message parsing — InstaPay / Vodafone Cash / bank SMS
@@ -2734,41 +2768,6 @@
         PF.data.meta.currency = currency.value.trim().slice(0, 8);
         PF.save();
         renderAll();
-      });
-    }
-
-    const exportBtn = $('#pf-export');
-    if (exportBtn) exportBtn.addEventListener('click', exportBackup);
-
-    const importBtn = $('#pf-import');
-    const importFile = $('#pf-import-file');
-    if (importBtn && importFile) {
-      importBtn.addEventListener('click', () => importFile.click());
-      importFile.addEventListener('change', (e) => {
-        const file = e.target.files && e.target.files[0];
-        if (!file) return;
-        if (!confirm('Importing replaces all current Personal Finance data. Continue?')) {
-          e.target.value = '';
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-          try {
-            PF.importData(String(reader.result || ''));
-            PF_STATE.month = nowMonth();
-            PF_STATE.filters.month = 'all';
-            resetEntryForm(true);
-            resetAccountForm();
-            resetRuleForm(true);
-            renderAll();
-            closeSettings();
-            toast('Personal Finance backup restored.');
-          } catch (err) {
-            toast(err.message, true);
-          }
-        };
-        reader.readAsText(file);
-        e.target.value = '';
       });
     }
 
