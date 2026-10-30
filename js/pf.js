@@ -824,7 +824,11 @@
       this.data = next;
     },
     refreshAfterRestore() {
-      PF_STATE.month = nowMonth();
+      // A historical backup must not open an empty current-month overview.
+      const entryMonths = this.data.entries.map(e => e.date.slice(0, 7));
+      const budgetMonths = this.data.budgets.map(b => b.month);
+      const restoredMonths = (entryMonths.length ? entryMonths : budgetMonths).sort();
+      PF_STATE.month = restoredMonths[restoredMonths.length - 1] || nowMonth();
       PF_STATE.filters = { month: 'all', type: 'all', accountId: 'all', categoryId: 'all', q: '' };
       PF_IMPORT.drafts = [];
       PF_IMPORT.parsedFrom = '';

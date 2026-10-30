@@ -16,8 +16,8 @@
   <meta name="apple-mobile-web-app-title" content="Al-shwareb" />
   <meta name="description" content="Personal profit & documentation tracker with day-accurate monthly profit splits." />
 
-  <link rel="stylesheet" href="css/styles.css" />
-  <link rel="stylesheet" href="css/pf.css" />
+  <link rel="stylesheet" href="css/styles.css?v=21" />
+  <link rel="stylesheet" href="css/pf.css?v=21" />
 </head>
 <body>
   <header class="app-header">
@@ -602,6 +602,7 @@
 
         <h3>Backup &amp; restore</h3>
         <p class="hint">Export one backup containing People, Transactions, Finance and all Personal Finance accounts, categories, entries, budgets, recurring items and currency settings. Financial data stays on this device. Notification permissions must be enabled separately on each phone.</p>
+        <p id="backup-contents" class="hint" role="status">Whole-app backup includes Personal Finance. Build 21.</p>
         <div class="btn-row">
           <button id="btn-export" class="btn btn-secondary">Export all data (.json)</button>
           <button id="btn-import" class="btn btn-secondary">Import backup</button>
@@ -724,11 +725,11 @@
 
   <div id="toast" class="toast" hidden></div>
 
-  <script src="js/storage.js"></script>
-  <script src="js/app.js"></script>
-  <script src="js/pf.js"></script>
-  <script src="js/backup.js"></script>
-  <script src="js/reminders.js"></script>
+  <script src="js/storage.js?v=21"></script>
+  <script src="js/app.js?v=21"></script>
+  <script src="js/pf.js?v=21"></script>
+  <script src="js/backup.js?v=21"></script>
+  <script src="js/reminders.js?v=21"></script>
   <script>
     // Enable offline use / installability. Ignored on browsers without SW support.
     if ('serviceWorker' in navigator) {

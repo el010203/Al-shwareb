@@ -582,7 +582,10 @@ const Store = {
   /* ---------- backup / restore ---------- */
 
   exportData() {
-    return JSON.stringify(this.data, null, 2);
+    // Older cached UI code calls Store directly. Never generate a main-only
+    // file from that path now that users expect a whole-app backup.
+    if (!window.AppBackup) throw new Error('Backup tools are still updating. Reopen the app online and try again. Do not clear site data.');
+    return window.AppBackup.exportData();
   },
 
   // Pure validation/normalisation: shared restore validates every module first.
@@ -614,9 +617,10 @@ const Store = {
   },
 
   importData(jsonText) {
-    const next = this.prepareImport(jsonText);
-    localStorage.setItem(DB_KEY, JSON.stringify(next));
-    this.data = next;
+    // prepareImport stays module-only; public imports always use the shared
+    // coordinator so PF cannot be omitted or bypass write rollback.
+    if (!window.AppBackup) throw new Error('Backup tools are still updating. Reopen the app online and try again. Do not clear site data.');
+    return window.AppBackup.importData(jsonText);
   },
 
   eraseAll() {
