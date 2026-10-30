@@ -601,9 +601,9 @@
         <hr class="divider" />
 
         <h3>Backup &amp; restore</h3>
-        <p class="hint">Data lives only in this browser. Export a backup file regularly so you never lose it.</p>
+        <p class="hint">Export one backup containing People, Transactions, Finance and all Personal Finance accounts, categories, entries, budgets, recurring items and currency settings. Financial data stays on this device. Notification permissions must be enabled separately on each phone.</p>
         <div class="btn-row">
-          <button id="btn-export" class="btn btn-secondary">Export backup (.json)</button>
+          <button id="btn-export" class="btn btn-secondary">Export all data (.json)</button>
           <button id="btn-import" class="btn btn-secondary">Import backup</button>
           <input type="file" id="import-file" accept="application/json,.json" hidden />
         </div>
@@ -613,9 +613,10 @@
         <h3>Sample &amp; danger zone</h3>
         <div class="btn-row">
           <button id="btn-sample" class="btn btn-ghost">Load sample data</button>
-          <button id="btn-erase" class="btn btn-danger">Erase everything</button>
+          <button id="btn-erase" class="btn btn-danger">Erase main records</button>
         </div>
         <p id="storage-note" class="hint"></p>
+        <p class="hint">Erase main records clears People, Transactions and Finance only. Personal Finance has its own erase control.</p>
       </div>
     </div>
   </div>
@@ -702,13 +703,7 @@
 
         <hr class="divider" />
 
-        <h3>Backup &amp; restore (PF only)</h3>
-        <p class="hint">The file holds only Personal Finance data: accounts, entries, budgets and recurring items.</p>
-        <div class="btn-row">
-          <button type="button" id="pf-export" class="btn btn-secondary">Export PF backup</button>
-          <button type="button" id="pf-backup-import" class="btn btn-secondary">Import PF backup</button>
-          <input type="file" id="pf-import-file" accept="application/json,.json" hidden />
-        </div>
+        <p class="hint">One backup covers the whole app, including Personal Finance. Use the main header's Settings → Export backup / Import backup.</p>
 
         <hr class="divider" />
 
@@ -732,6 +727,7 @@
   <script src="js/storage.js"></script>
   <script src="js/app.js"></script>
   <script src="js/pf.js"></script>
+  <script src="js/backup.js"></script>
   <script src="js/reminders.js"></script>
   <script>
     // Enable offline use / installability. Ignored on browsers without SW support.

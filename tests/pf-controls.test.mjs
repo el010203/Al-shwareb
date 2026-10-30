@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-const source = await readFile(new URL('../js/pf.js', import.meta.url), 'utf8');
+const source = (await Promise.all(['storage.js', 'app.js', 'pf.js', 'backup.js'].map(name => readFile(new URL('../js/' + name, import.meta.url), 'utf8')))).join('\n;\n');
 
 async function setup(t) {
   const dom = new JSDOM(html, { url: 'https://example.test/', runScripts: 'outside-only' });
@@ -15,6 +15,7 @@ async function setup(t) {
   w.toast = () => {};
   w.HTMLElement.prototype.scrollIntoView = () => {};
   w.eval(source);
+  w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
   let filesOpened = 0;
   for (const input of w.document.querySelectorAll('input[type="file"]')) {
     input.click = () => { filesOpened++; };
@@ -61,11 +62,14 @@ test('manual transaction controls still save without opening files', async t => 
   assert.equal(filesOpened(), 0);
 });
 
-test('only the dedicated PF backup-import button opens the file picker', async t => {
-  const { $, filesOpened } = await setup(t);
+test('only the shared app backup button opens files; PF has no separate backup controls', async t => {
+  const { w, $, filesOpened } = await setup(t);
   $('#pf-settings-btn').click();
   assert.equal(filesOpened(), 0);
-  const backupButton = [...$('#modal-pf-settings').querySelectorAll('button')].find(el => el.textContent.trim() === 'Import PF backup');
-  backupButton.click();
-  assert.equal(filesOpened(), 1, 'Backup import must open its file picker exactly once');
+  assert.equal($('#pf-export'), null);
+  assert.equal($('#pf-backup-import'), null);
+  assert.equal($('#pf-import-file'), null);
+  assert.equal(w.document.querySelectorAll('input[type="file"]').length, 1);
+  $('#btn-import').click();
+  assert.equal(filesOpened(), 1, 'The shared backup import must open its file picker exactly once');
 });
