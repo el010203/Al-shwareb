@@ -146,12 +146,20 @@ Use the **Month** selector in the PF top bar for Overview and Budgets, and
 
 ### Bank AlAhly messages
 
+`FAWRY*SPOT IN CAFE` is treated as a cafe card purchase, not a Fawry bill or
+transfer: **165 EGP expense · Bank · Food & drinks**, with note
+`Bank card · SPOT IN CAFE · Mobile payment · via Fawry`.
+The user confirmed this payment was made with Apple Pay. The SMS itself only
+says `Mobile Payment`, so the importer retains that generic label rather than
+assuming every mobile payment is Apple Pay. Apple Pay uses the linked card;
+no separate wallet expense is added. The category and note remain editable.
+
 Card, ATM and instant-transfer SMS are recognised too:
 
 ```
 تم خصم 200 جنيه من بطاقة الخصم المباشر رقم 6758 باستخدام Mobile Payment عند CROWD POR يوم 28/10/26 الساعة 14:21 المتاح 812.42EGP للمزيد إتصل بـ 19623
 ```
-→ **expense · 200.00 EGP · 28 Oct 2026 · bank account · note `Bank card · CROWD POR`**
+→ **expense · 200.00 EGP · 28 Oct 2026 · bank account · note `Bank card · CROWD POR · Mobile payment`**
 
 ```
 تم تنفيذ تحويل لحظي من حسابكم رقم 0150 بمبلغ 200.00 جم إلى مهاب م*** ***| رقم مرجعي 230267782328 يوم 28-10 الساعة 18:32 للمزيد اتصل بـ 19623

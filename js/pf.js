@@ -1884,10 +1884,28 @@
       if (!m) continue;
       let name = m[1].split(MERCHANT_STOP)[0];
       name = name.replace(/\s+/g, ' ').replace(/[^\p{L}\p{N}&*'’._ -]+$/u, '').trim();
+      // Acquirers prefix the shop: "FAWRY*SPOT IN CAFE" -> "SPOT IN CAFE".
+      const acquirer = name.match(/^(Fawry)\s*\*\s*(.+)$/i);
+      if (acquirer && acquirer[2].trim().length >= 2) name = acquirer[2].trim();
       if (!/[A-Za-z\u0621-\u064A]/.test(name)) continue;
       return name.slice(0, 40);
     }
     return '';
+  }
+
+  // Recognise the processor prefix confirmed in the cafe receipt.
+  function findAcquirer(text) {
+    const m = text.match(/\b(Fawry)\s*\*/i);
+    if (!m) return '';
+    const name = m[1];
+    return name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+  }
+
+  // Wallet/contactless payments show up as "Mobile Payment" in the SMS.
+  function isMobilePayment(text) {
+    return /(mobile\s*payment|apple\s*pay|google\s*pay|samsung\s*pay|contactless|باستخدام\s+mobile|دفع\s+موبايل)/i.test(
+      text
+    );
   }
 
   function findCounterparty(text) {
@@ -1908,7 +1926,7 @@
     return findMerchant(text);
   }
 
-  function suggestCategoryId(text, type) {
+  function suggestCategoryId(text, type, merchant) {
     const cats = PF.categoriesOf(type);
     if (!cats.length) return null;
     const hay = text.toLowerCase();
@@ -1918,6 +1936,11 @@
       return name.split(/[^\p{L}\p{N}]+/u).some((w) => w.length >= 4 && hay.includes(w));
     });
     if (hit) return hit.id;
+    // Cafe receipts suggest food/drinks, but never create or force a category.
+    if (type === 'expense' && /\b(caf[eé]|coffee)\b|كافيه|كافي|قهوة/i.test(merchant || '')) {
+      const food = cats.find((c) => /food|drink|طعام|أكل|اكل|مطاعم/i.test(c.name));
+      if (food) return food.id;
+    }
     const generic = cats.find((c) => /^(other|misc|un ?categor|أخرى|اخرى|متنوع|غير\s+مصنف)/i.test(c.name));
     return (generic || cats[0]).id;
   }
@@ -1968,6 +1991,8 @@
       note: '',
       confidence: 'low',
       isAtm: false,
+      acquirer: '',
+      mobilePay: false,
       error: '',
     };
     if (!text) {
@@ -1994,12 +2019,16 @@
     draft.ref = findReference(analysis);
     draft.counterparty = findCounterparty(analysis);
     draft.isAtm = /(atm|صراف|ماكينة|withdrawal|سحب\s+نقدي)/i.test(analysis);
+    draft.acquirer = findAcquirer(analysis);
+    draft.mobilePay = isMobilePayment(analysis);
     draft.accountId = suggestAccountId(analysis);
-    draft.categoryId = suggestCategoryId(analysis, draft.type);
+    draft.categoryId = suggestCategoryId(analysis, draft.type, draft.counterparty);
 
     const bits = [];
     if (draft.sender && draft.sender !== 'Message') bits.push(draft.sender);
     if (draft.counterparty) bits.push(draft.counterparty);
+    if (draft.mobilePay) bits.push('Mobile payment');
+    if (draft.acquirer) bits.push(`via ${draft.acquirer}`);
     if (draft.ref) bits.push(`Ref ${draft.ref}`);
     draft.note = (bits.length ? bits.join(' · ') : text.replace(/\s+/g, ' ').slice(0, 90)).slice(0, 200);
     return draft;
