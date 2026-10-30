@@ -1598,7 +1598,7 @@
     'سبتمبر': 9, 'اكتوبر': 10, 'أكتوبر': 10, 'نوفمبر': 11, 'ديسمبر': 12,
   };
 
-  const CURRENCY_RE = /(egp|e£|\ble\b|جنيه|ج\.م|usd|\$|eur|aed|ريال)/i;
+  const CURRENCY_RE = /(egp|e£|\ble\b|جنيه|ج\.م|\bجم\b|usd|\$|eur|aed|ريال)/i;
 
   const INCOME_PATTERNS = [
     /you\s+(?:have\s+)?received/i,
@@ -1709,6 +1709,22 @@
     }
     m = text.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/);
     if (m) return bestNumericDate(+m[1], +m[2], +m[3]);
+
+    // Day and month only ("يوم 28-10") — banks assume the current year.
+    m = text.match(/\b(\d{1,2})[\/\-.](\d{1,2})\b(?![:\d])/);
+    if (m) {
+      const year = new Date().getFullYear();
+      const first = +m[1];
+      const second = +m[2];
+      const dmy = first > 12 ? makeDate(year, second, first) : makeDate(year, second, first);
+      const mdy = makeDate(year, first, second);
+      if (dmy && mdy) {
+        // Prefer the reading that is not in the future.
+        const limit = isoOf(new Date(Date.now() + 2 * 86400000));
+        return dmy <= limit ? dmy : mdy;
+      }
+      return dmy || mdy;
+    }
     return null;
   }
 
@@ -1748,7 +1764,9 @@
     if (/etisalat\s*cash|اتصالات\s*كاش/i.test(text)) return 'Etisalat Cash';
     if (/orange\s*cash|اورنج\s*كاش|أورنج\s*كاش/i.test(text)) return 'Orange Cash';
     if (/instapay|انستا/i.test(text)) return 'InstaPay';
-    if (/بنك|bank|مصرف/i.test(text)) return 'Bank';
+    if (/atm|بطاقة|debit\s*card|credit\s*card|mobile\s*payment|fawry|كارت/i.test(text)) return 'Bank card';
+    if (/تحويل\s+لحظي|instant\s+transfer/i.test(text)) return 'Bank transfer';
+    if (/بنك|bank|مصرف|حسابكم|حسابك/i.test(text)) return 'Bank';
     return 'Message';
   }
 
@@ -1789,7 +1807,9 @@
     if (/(egp|e£|\ble\b|جنيه|ج\.م|usd|\$|eur|aed|ريال)\s*$/i.test(before)) score += 6;
     if (/(amount|مبلغ|value|قيمة|قيمه|sent|received|transfer|تحويل|استلام|أرسل|ارسل)/i.test(before)) score += 3;
     if (/(fee|fees|commission|charges|رسوم|عمولة|مصاريف)/i.test(before)) score -= 12;
-    if (/(balance|رصيد|available|متاح)/i.test(before)) score -= 12;
+    if (/(balance|رصيد|available|متاح|المتاح|الرصيد)/i.test(before)) score -= 12;
+    // "رقم 6758" (card) / "رقم 0150" (account) — identifiers, never amounts.
+    if (/(?:رقم|number|no\.?)\s*$/i.test(before)) score -= 10;
     if (/(ref|reference|رقم\s+العملية|رقم\s+العمليه|trx|transaction\s*id|\bid\b)/i.test(before)) score -= 10;
     if (/^0\d{7,}$/.test(cand.raw)) score -= 16; // phone number
     if (/^\d{9,}$/.test(cand.raw)) score -= 8; // long reference
@@ -1818,7 +1838,7 @@
   function findReference(text) {
     // Keep leading letters (InstaPay refs look like IP3847291045).
     let m = text.match(
-      /(?:ref(?:erence)?|trx|transaction\s*(?:id|no|number)?|رقم\s+العملية|رقم\s+العمليه|المرجع)\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9-]{3,})/i
+      /(?:ref(?:erence)?|trx|transaction\s*(?:id|no|number)?|رقم\s+العملية|رقم\s+العمليه|رقم\s+مرجعي|رقم\s+المرجع|المرجع|مرجعي)\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9-]{3,})/i
     );
     if (m) return m[1];
     // Bare long number, but never a phone number (they start with 0).
@@ -1829,6 +1849,8 @@
   const NAME_STOP =
     /(via|successfully|successful|\bwas\b|\bhas\b|\bhave\b|\bon\b|\bat\b|\bdate\b|\bref\b|\bbalance\b|عبر|بنجاح|باتصال|الساعة|بتاريخ|تاريخ|رقم|برقم|على|في|فى|المسجل|رصيد|رسوم|عمولة|مصاريف|خدمة|خدمه)/i;
 
+  const INSTRUMENT_RE = /^(?:بطاقة|كارت|حساب|حسابك|حسابكم|محفظة|محفظتك|رصيد|card|account|wallet|debit|credit)/i;
+
   function cleanCounterparty(raw) {
     let name = String(raw || '').split(NAME_STOP)[0];
     const punct = name.search(/[.،,;:!?]/);
@@ -1837,29 +1859,53 @@
     const parts = name.split(/\s+(?:إلى|الى|to)\s+/i);
     name = parts[parts.length - 1];
     name = name.replace(/^(?:محفظتك|محفظتي|حسابك|حسابي|your\s+wallet|your\s+account)\s*/i, '');
-    name = name.replace(/^[^\p{L}\p{N}+]+|[^\p{L}\p{N}+]+$/gu, '').replace(/\s+/g, ' ').trim();
+    name = name.replace(/^[^\p{L}\p{N}+*]+|[^\p{L}\p{N}+*]+$/gu, '').replace(/\s+/g, ' ').trim();
+    // "من بطاقة الخصم المباشر" describes the payment method, not a person.
+    if (INSTRUMENT_RE.test(name)) return '';
+    // Banks mask half the name: "مهاب م*** ***" → "مهاب م***".
+    name = name.replace(/\*+(?:\s*\*+)*/g, '***').trim();
     const digits = name.replace(/[\s-]/g, '');
     if (/^0\d{7,}$/.test(digits)) return `phone ${digits}`;
     if (!/[A-Za-z\u0621-\u064A]/.test(name)) return '';
     return name.slice(0, 40);
   }
 
+  const MERCHANT_STOP =
+    /(\s+(?:يوم|الساعة|بتاريخ|المتاح|الرصيد|للمزيد|اتصل|إتصل|باستخدام|طريقة)|\s+\d{1,2}[\/\-.]\d|\s+(?:on|at|date|available|balance|for\s+more)\b)/i;
+
+  // Card purchases name the shop, not a person: "Payment عند CROWD POR".
+  function findMerchant(text) {
+    const patterns = [
+      /(?:^|\s)عند\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 &*._'’-]{1,40})/i,
+      /\bat\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 &*._'’-]{1,40})/i,
+    ];
+    for (const re of patterns) {
+      const m = text.match(re);
+      if (!m) continue;
+      let name = m[1].split(MERCHANT_STOP)[0];
+      name = name.replace(/\s+/g, ' ').replace(/[^\p{L}\p{N}&*'’._ -]+$/u, '').trim();
+      if (!/[A-Za-z\u0621-\u064A]/.test(name)) continue;
+      return name.slice(0, 40);
+    }
+    return '';
+  }
+
   function findCounterparty(text) {
     // Prefer the recipient/destination, then the sender.
     const patterns = [
       // "المسجل بإسم YOSSEF ..." / "registered as ..." — the clearest source of a name
-      /(?:بإسم|باسم|بالإسم|بالاسم|registered\s+(?:as|in\s+the\s+name\s+of)|under\s+the\s+name\s+of)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’-]{1,44})/i,
-      /(?:لرقم|ل\s*رقم|إلى\s*رقم|الى\s*رقم|برقم)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’-]{1,44})/i,
-      /(?:\bto\s*(?:number|no\.?)?)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’-]{1,44})/i,
-      /(?:\bto\b|إلى|الى)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’-]{1,44})/i,
-      /(?:\bfrom\b|من)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’-]{1,44})/i,
+      /(?:بإسم|باسم|بالإسم|بالاسم|registered\s+(?:as|in\s+the\s+name\s+of)|under\s+the\s+name\s+of)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’*|-]{1,44})/i,
+      /(?:لرقم|ل\s*رقم|إلى\s*رقم|الى\s*رقم|برقم)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’*|-]{1,44})/i,
+      /(?:\bto\s*(?:number|no\.?)?)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’*|-]{1,44})/i,
+      /(?:\bto\b|إلى|الى)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’*|-]{1,44})/i,
+      /(?:\bfrom\b|من)\s*:?\s*([A-Za-z\u0621-\u064A0-9][A-Za-z\u0621-\u064A0-9 ._'’*|-]{1,44})/i,
     ];
     for (const re of patterns) {
       const m = text.match(re);
       const name = m ? cleanCounterparty(m[1]) : '';
       if (name) return name;
     }
-    return '';
+    return findMerchant(text);
   }
 
   function suggestCategoryId(text, type) {
@@ -1884,6 +1930,12 @@
       .filter((a) => a.name.trim().length >= 3 && hay.includes(a.name.trim().toLowerCase()))
       .sort((a, b) => b.name.length - a.name.length)[0];
     if (byName) return byName.id;
+    if (/بطاقة|كارت|atm|card|تحويل\s+لحظي|instant\s+transfer|حسابكم|حسابك/.test(hay)) {
+      const named = PF.data.accounts.find((a) => /bank|بنك|card|بطاقة/i.test(a.name));
+      if (named) return named.id;
+      const byType = PF.data.accounts.find((a) => a.type === 'bank');
+      if (byType) return byType.id;
+    }
     if (/vodafone|فودافون|محفظتك|محفظة|wallet/.test(hay)) {
       const named = PF.data.accounts.find((a) => /vodafone|فودافون|wallet|محفظة/i.test(a.name));
       if (named) return named.id;
@@ -1915,6 +1967,7 @@
       categoryId: null,
       note: '',
       confidence: 'low',
+      isAtm: false,
       error: '',
     };
     if (!text) {
@@ -1940,6 +1993,7 @@
     draft.fee = findFee(analysis, amountCand);
     draft.ref = findReference(analysis);
     draft.counterparty = findCounterparty(analysis);
+    draft.isAtm = /(atm|صراف|ماكينة|withdrawal|سحب\s+نقدي)/i.test(analysis);
     draft.accountId = suggestAccountId(analysis);
     draft.categoryId = suggestCategoryId(analysis, draft.type);
 
@@ -2036,6 +2090,13 @@
         }
         const isIncome = d.type === 'income';
         const cats = PF.categoriesOf(d.type);
+        if (cats.length && !cats.some((c) => c.id === d.categoryId)) d.categoryId = cats[0].id;
+        if (!PF.data.accounts.some((a) => a.id === d.accountId)) d.accountId = PF.data.accounts[0].id;
+        // A select must always point at a real option.
+        const catId = cats.some((c) => c.id === d.categoryId) ? d.categoryId : (cats[0] || {}).id;
+        const accId = PF.data.accounts.some((a) => a.id === d.accountId)
+          ? d.accountId
+          : (PF.data.accounts[0] || {}).id;
         const conf =
           d.confidence === 'low'
             ? '<span class="pf-conf low">Direction guessed — please check</span>'
@@ -2066,7 +2127,7 @@
                   ${PF.data.accounts
                     .map(
                       (a) =>
-                        `<option value="${escapeHtml(a.id)}"${a.id === d.accountId ? ' selected' : ''}>${escapeHtml(a.name)}</option>`
+                        `<option value="${escapeHtml(a.id)}"${a.id === accId ? ' selected' : ''}>${escapeHtml(a.name)}</option>`
                     )
                     .join('')}
                 </select>
@@ -2077,7 +2138,7 @@
                   ${cats
                     .map(
                       (c) =>
-                        `<option value="${escapeHtml(c.id)}"${c.id === d.categoryId ? ' selected' : ''}>${escapeHtml(c.name)}</option>`
+                        `<option value="${escapeHtml(c.id)}"${c.id === catId ? ' selected' : ''}>${escapeHtml(c.name)}</option>`
                     )
                     .join('')}
                 </select>
@@ -2087,6 +2148,11 @@
                 <input type="text" id="pf-imp-note-${i}" class="input" maxlength="200" value="${escapeHtml(d.note)}" data-pf-import-field="note" data-index="${i}" />
               </div>
             </div>
+            ${
+              d.isAtm
+                ? '<p class="pf-import-hintline">ATM cash withdrawal — if you track cash separately, also add an income entry to your Cash account.</p>'
+                : ''
+            }
             <div class="pf-import-foot">
               <span class="pf-import-meta">
                 ${[

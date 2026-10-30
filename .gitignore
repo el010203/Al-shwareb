@@ -5,3 +5,6 @@ node_modules/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Files downloaded from connected apps (screenshots, attachments)
+google_drive/

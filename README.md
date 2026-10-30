@@ -100,7 +100,12 @@ What it recognises:
 - **Accounts** — the destination wallet is suggested when the message mentions Vodafone
   Cash / محفظتك, and a bank account when it mentions InstaPay. Advert links are stripped
   first, so a link containing `vfcash` cannot be mistaken for an account called "Cash".
-- **Balances are ignored** — `رصيد حسابك ... الحالي 9.20` never becomes the amount.
+- **Balances are ignored** — `رصيد حسابك ... الحالي 9.20` and `المتاح 812.42EGP` never
+  become the amount, and neither do card (`رقم 6758`) or account (`رقم 0150`) numbers.
+- **Bank cards & ATM** — debit-card purchases are read with the merchant
+  (`عند CROWD POR`, `عند FAWRY*SPOT IN CAFE`, `عند NBE ATM968`), card transactions
+  suggest a bank account, and ATM withdrawals carry a reminder that moving money from
+  the bank to your Cash account needs a matching income entry.
 
 Example — an incoming Vodafone Cash message:
 
@@ -138,6 +143,27 @@ why the paste box is the default path on both platforms.
 Use the **Month** selector in the PF top bar for Overview and Budgets, and
 **Settings** inside the tab to change the PF currency, export/import a PF-only backup
 (`pf-backup-YYYY-MM-DD.json`) or erase PF data without touching the rest of the app.
+
+### Bank AlAhly messages
+
+Card, ATM and instant-transfer SMS are recognised too:
+
+```
+تم خصم 200 جنيه من بطاقة الخصم المباشر رقم 6758 باستخدام Mobile Payment عند CROWD POR يوم 28/10/26 الساعة 14:21 المتاح 812.42EGP للمزيد إتصل بـ 19623
+```
+→ **expense · 200.00 EGP · 28 Oct 2026 · bank account · note `Bank card · CROWD POR`**
+
+```
+تم تنفيذ تحويل لحظي من حسابكم رقم 0150 بمبلغ 200.00 جم إلى مهاب م*** ***| رقم مرجعي 230267782328 يوم 28-10 الساعة 18:32 للمزيد اتصل بـ 19623
+```
+→ **expense · 200.00 EGP · 28 Oct 2026 · note `Bank transfer · مهاب م*** · Ref 230267782328`**
+(the account number `0150` is never mistaken for the amount, `جم` counts as a currency, and
+a date without a year — `يوم 28-10` — uses the current year)
+
+```
+تم خصم EGP 300 من بطاقة الخصم المباشر رقم 6758 عند NBE ATM968 يوم 29/10/26 الساعة 10:26 المتاح 311.92EGP
+```
+→ **expense · 300.00 EGP · 29 Oct 2026 · note `Bank card · NBE ATM968`**
 
 ## How to run
 

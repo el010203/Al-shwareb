@@ -604,3 +604,14 @@
   .pf-import-grid { grid-template-columns: 1fr; }
   .pf-import-foot .btn { width: 100%; }
 }
+
+.pf-import-hintline {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--gold);
+  background: rgba(242, 182, 92, 0.1);
+  border: 1px solid rgba(242, 182, 92, 0.26);
+  border-radius: 8px;
+}
