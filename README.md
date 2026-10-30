@@ -320,3 +320,38 @@ js/pf.js               # Personal Finance module (own data store, UI, SMS parser
 
 When you change app files, bump `CACHE_VERSION` in `sw.js` so installed copies
 pick up the update.
+
+## Mobile and tablet layout checks
+
+The layout adapts to narrow phones, tablet portrait/landscape and iPad split-view
+widths. Phone navigation wraps so no section is hidden off-screen; forms use one
+column on phones and two on tablets. Dense tables become labelled cards on phones
+and stay horizontally scrollable inside their own panels on wider screens.
+Inputs use 16px text to avoid Safari's small-input focus zoom, touch controls have
+larger targets, and dialogs scroll with their close button remaining visible.
+
+Run the normal regression tests with `npm test`. For real Chromium layout tests,
+point `CHROMIUM_PATH` at a locally installed Chrome or Chromium executable:
+
+```powershell
+# Windows PowerShell — adjust if Chrome is installed elsewhere.
+$env:CHROMIUM_PATH = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+npm run test:responsive
+```
+
+```sh
+# Linux — adjust to your installed browser.
+CHROMIUM_PATH=/usr/bin/chromium npm run test:responsive
+```
+
+The browser test starts its own local static server, seeds synthetic test records,
+and checks ten viewports from 320px phones through 1366px tablets. It checks every
+main tab, PF subviews, message previews, long names/large amounts, input sizes,
+file-picker isolation and scrollable history/settings dialogs. It never reads or
+changes a user's real browser data. Set `SCREENSHOT_DIR` to a temporary directory
+if screenshots are wanted; don't commit generated screenshots.
+
+Chromium viewport tests are not a substitute for testing Safari on an actual
+phone/iPad. After deploying, also check Safari date pickers, portrait/landscape,
+the on-screen keyboard, and the Home Screen app's safe-area spacing. Never clear
+site data to update the app: that would erase locally stored finance records.

@@ -28,6 +28,8 @@
   margin-bottom: 10px;
 }
 .pf-subnav {
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   gap: 4px;
   overflow-x: auto;
@@ -40,6 +42,8 @@
 }
 .pf-subnav::-webkit-scrollbar { display: none; }
 .pf-subnav-btn {
+  min-height: 44px;
+  flex: none;
   appearance: none;
   border: 1px solid transparent;
   background: transparent;
@@ -60,7 +64,8 @@
   color: var(--green);
   font-weight: 700;
 }
-.pf-toolbar { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+.pf-toolbar { display: flex; flex-wrap: wrap; min-width: 0; max-width: 100%; gap: 8px; align-items: center; margin-left: auto; }
+.pf-toolbar #pf-settings-btn { margin-left: auto; }
 .pf-month-field { display: flex; align-items: center; gap: 7px; }
 .pf-month-field[hidden] { display: none; }
 .pf-month-field label {
@@ -415,7 +420,7 @@
 
 /* ---------- misc ---------- */
 .pf-chart .empty-state, .pf-view .empty-state { padding: 22px 12px; }
-#pf-budget-cards { grid-template-columns: repeat(3, 1fr); }
+#pf-budget-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 /* ---------- responsive ---------- */
 @media (max-width: 640px) {
@@ -446,7 +451,7 @@
   .pf-inline-form .field { min-width: 100%; }
   .pf-inline-form .pf-inline-submit { min-width: 100%; }
   .pf-inline-form .pf-inline-submit label { display: none; }
-  #pf-budget-cards { grid-template-columns: 1fr 1fr; }
+  #pf-budget-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #pf-budget-cards .card:last-child { grid-column: 1 / -1; }
 }
 
@@ -456,7 +461,7 @@
 
 @media (min-width: 820px) {
   .pf-chart-bars { height: 140px; }
-  #pf-budget-cards { grid-template-columns: repeat(3, 1fr); }
+  #pf-budget-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 /* ============ Import from message ============ */
@@ -497,7 +502,7 @@
 .pf-import-body textarea {
   margin-top: 14px;
   min-height: 96px;
-  font-size: 0.86rem;
+  font-size: 16px;
   line-height: 1.45;
   resize: vertical;
 }
@@ -564,7 +569,7 @@
 }
 .pf-import-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 .pf-import-grid .field label { font-size: 0.76rem; }
@@ -614,4 +619,38 @@
   background: rgba(242, 182, 92, 0.1);
   border: 1px solid rgba(242, 182, 92, 0.26);
   border-radius: 8px;
+}
+
+/* ---------- phone / tablet containment and touch layouts ---------- */
+.pf-topbar > * { min-width: 0; }
+.pf-entry-title, .pf-summary-item, .pf-chip { overflow-wrap: anywhere; max-width: 100%; }
+.pf-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.pf-line-main { min-width: 0; overflow-wrap: anywhere; }
+.pf-budget-head, .pf-budget-foot, .pf-day-head, .pf-line { flex-wrap: wrap; }
+.pf-budget-nums { white-space: normal; }
+.pf-legend { flex-wrap: wrap; }
+
+@media (max-width: 1024px) {
+  .pf-topbar { flex-direction: column; align-items: stretch; }
+  .pf-subnav { width: 100%; }
+  .pf-subnav-btn { min-height: 44px; flex: 1 0 auto; }
+  .pf-toolbar { margin-left: 0; justify-content: space-between; }
+  .pf-chip-x { width: 44px; height: 44px; }
+}
+
+@media (max-width: 640px) {
+  .pf-entry-main { flex-basis: calc(100% - 42px); }
+  .pf-entry-right { padding-left: 0; flex-wrap: wrap; min-width: 0; }
+  .pf-entry-date { display: inline; }
+  .pf-entry-actions { margin-left: auto; }
+  .pf-entry-amt, .pf-account-balance { white-space: normal; overflow-wrap: anywhere; }
+  .pf-account-right { flex-wrap: wrap; min-width: 0; }
+  .pf-account-right .row-actions { width: auto; }
+  .pf-import-body { padding: 0 12px 12px; }
+  .pf-import-actions .btn { flex: 1 1 120px; white-space: normal; }
+  .pf-inline-submit .btn { width: 100%; }
+  /* Every section stays visible without a hidden horizontal swipe. */
+  .pf-subnav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; }
+  .pf-subnav-btn { min-width: 0; padding: 8px 4px; white-space: normal; overflow-wrap: anywhere; }
+  .pf-subnav-btn:last-child { grid-column: span 2; }
 }
