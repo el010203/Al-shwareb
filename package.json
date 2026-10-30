@@ -1,0 +1,8 @@
+{
+  "name": "al-shwareb",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.mjs"
+  }
+}

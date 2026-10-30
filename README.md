@@ -42,6 +42,21 @@ percent on each transaction, and see total profit plus month-by-month profit.
   and import it again any time.
 - Zero dependencies, works fully offline, mobile-friendly.
 
+## Optional transaction notifications
+
+**Personal Finance → Settings → Enable reminders** opts this device into a
+“New transaction” push every **3 hours, 24 hours a day**, including overnight.
+Tapping it opens the entry form. Android and installed iPhone PWAs (iOS 16.4+)
+are supported; OS permissions and an internet connection are required. Delivery
+can be delayed and the schedule uses UTC, not the phone's local midnight.
+
+**The backend must be deployed first.** Cloudflare Pages needs a small separate
+scheduled Worker and D1 database; uploading static files alone does not enable
+notifications. Finance data stays local; only opted-in push subscriptions are
+stored online. Follow **[REMINDERS.md](REMINDERS.md)** for the complete Pages setup,
+keys/bindings, privacy details and device instructions. Build Pages with
+`npm run build` and publish **`dist`**, never the backend source/repository root.
+
 ## Personal Finance (PF) tab
 
 The **Personal Finance** tab is a separate module inside the same page. It has its own

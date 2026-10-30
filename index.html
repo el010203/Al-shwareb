@@ -691,6 +691,17 @@
 
         <hr class="divider" />
 
+        <h3>Transaction reminders</h3>
+        <p class="hint">Every 3 hours, all day and all night (8 times daily). Tap a notification to open the entry form. Enable separately on each phone.</p>
+        <p class="hint">This optional online service stores only this device's push subscription, not your financial records. On iPhone, install on the Home Screen first (iOS 16.4+). Delivery is not an exact alarm.</p>
+        <div class="btn-row">
+          <button type="button" id="pf-reminder-enable" class="btn btn-secondary">Enable reminders</button>
+          <button type="button" id="pf-reminder-disable" class="btn btn-ghost">Disable reminders</button>
+        </div>
+        <p id="pf-reminder-status" class="hint" role="status" aria-live="polite">Reminders are off until you enable them. Internet and the reminder service are required.</p>
+
+        <hr class="divider" />
+
         <h3>Backup &amp; restore (PF only)</h3>
         <p class="hint">The file holds only Personal Finance data: accounts, entries, budgets and recurring items.</p>
         <div class="btn-row">
@@ -721,6 +732,7 @@
   <script src="js/storage.js"></script>
   <script src="js/app.js"></script>
   <script src="js/pf.js"></script>
+  <script src="js/reminders.js"></script>
   <script>
     // Enable offline use / installability. Ignored on browsers without SW support.
     if ('serviceWorker' in navigator) {

@@ -8,3 +8,7 @@ Thumbs.db
 
 # Files downloaded from connected apps (screenshots, attachments)
 google_drive/
+
+dist/
+.dev.vars*
+.env*
