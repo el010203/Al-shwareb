@@ -1,0 +1,13 @@
+# Separate scheduled Worker; Pages itself cannot run cron jobs.
+name = "al-shwareb-reminders"
+main = "scheduler.mjs"
+compatibility_date = "2026-10-30"
+
+[triggers]
+crons = ["0 */3 * * *"]
+
+[[d1_databases]]
+binding = "REMINDERS_DB"
+database_name = "al-shwareb-reminders"
+# Replace with the ID returned by `wrangler d1 create al-shwareb-reminders`.
+database_id = "REPLACE_WITH_CREATED_DATABASE_ID"

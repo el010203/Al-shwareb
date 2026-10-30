@@ -9,3 +9,15 @@ icons/icon-source.svg
 icons/icon-maskable-source.svg
 .DS_Store
 Thumbs.db
+google_drive/
+
+server/
+functions/
+scripts/
+tests/
+dist/
+package.json
+package-lock.json
+.dev.vars*
+.env*
+REMINDERS.md

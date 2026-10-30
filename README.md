@@ -29,11 +29,164 @@ percent on each transaction, and see total profit plus month-by-month profit.
   amount** for the profit, set an optional **date to receive**, mark payouts as
   **Received**, and inspect everything in **View history** (with status, profit-option,
   and search filters).
+- **Personal Finance tab (PF)** — a completely standalone module with its own storage
+  key, so nothing it records ever appears in People, Transactions, Finance or the
+  Dashboard. It documents **every income and every expense** (amount, date, account,
+  category, note), keeps **multiple accounts** (cash, bank, wallet, card, savings) with
+  automatic balances, holds **monthly budgets per category** with usage bars, and
+  supports **recurring entries** (weekly / monthly / yearly) that you confirm when due.
+  Entries can be filtered by month, type, account, category and free-text search.
 - **Filters** — view everything or narrow down by person and/or month.
 - **Edit & delete** any transaction or person.
 - **Backup / restore** — all data lives in your browser; export a `.json` backup file
   and import it again any time.
 - Zero dependencies, works fully offline, mobile-friendly.
+
+## Optional transaction notifications
+
+**Personal Finance → Settings → Enable reminders** opts this device into a
+“New transaction” push every **3 hours, 24 hours a day**, including overnight.
+Tapping it opens the entry form. Android and installed iPhone PWAs (iOS 16.4+)
+are supported; OS permissions and an internet connection are required. Delivery
+can be delayed and the schedule uses UTC, not the phone's local midnight.
+
+**The backend must be deployed first.** Cloudflare Pages needs a small separate
+scheduled Worker and D1 database; uploading static files alone does not enable
+notifications. Finance data stays local; only opted-in push subscriptions are
+stored online. Follow **[REMINDERS.md](REMINDERS.md)** for the complete Pages setup,
+keys/bindings, privacy details and device instructions. Build Pages with
+`npm run build` and publish **`dist`**, never the backend source/repository root.
+
+## Personal Finance (PF) tab
+
+The **Personal Finance** tab is a separate module inside the same page. It has its own
+data store (`alshwareb_pf_v1` in `localStorage`), its own currency label, its own backup
+file and its own erase button — the two halves of the app never read or write each
+other's data.
+
+- **Overview** — total balance across accounts, income / expenses / net for the chosen
+  month (with change vs last month and savings rate), a 6-month income-vs-expense chart,
+  account balances, budget progress and recent entries.
+- **Import from message** — paste (or copy) an InstaPay, Vodafone Cash, Etisalat Cash or
+  bank SMS and PF reads the amount, whether money came in or went out, the date, the
+  reference and any fee, then pre-fills an editable entry you confirm. Arabic and English
+  messages and Arabic-Indic digits are understood; paste several messages at once to add
+  them together. Parsing happens entirely on the device.
+- **Entries** — record income or expense with amount, date, account, category and an
+  optional note. Filter by month, type, account, category or search text; edit or delete
+  any entry. The account balance is shown after every save.
+- **Budgets** — set a monthly limit per expense category, see spent / limit and
+  remaining, copy the previous month's budgets forward, and spot spending that has no
+  budget yet.
+- **Accounts** — add or edit accounts (cash, bank, mobile wallet, card, savings, other)
+  with an opening balance; balances are derived from every entry. Categories can be
+  added or removed here (a category can only be removed when nothing uses it).
+- **Recurring** — define rent, salary or subscriptions and confirm them when due; PF
+  shows overdue counts and can post everything that is due in one tap. Nothing is ever
+  posted silently.
+
+### Importing InstaPay / Vodafone Cash messages
+
+Web apps cannot read SMS — no browser or PWA exposes an API for it, and iOS has no
+SMS API at all. So PF takes the message as *text* instead:
+
+1. Long-press the SMS on your phone → **Copy** (or forward/share it to yourself).
+2. Open **Personal Finance → Entries → Import from message** and paste it.
+3. PF shows what it understood — type, amount, date, account, category, note — with each
+   field editable. Tap **Add** (or **Add all** for a multi-message paste).
+
+What it recognises:
+
+- **Direction** — "you received" / "you sent", "تم استلام" / "تم تحويل" / "تم خصم",
+  credits, deposits, withdrawals, payments.
+- **Amount** — currency-tagged numbers (EGP, LE, جنيه, ج.م), ignoring balances, fees,
+  phone numbers, references and dates.
+- **Date** — `dd/mm/yyyy`, `yyyy-mm-dd`, `12 Oct 2026`, `12 اكتوبر 2026`, and the
+  year-first `yy-mm-dd` form Egyptian operators use (`26-10-28` → 28 Oct 2026). Readings
+  that land in the future are rejected in favour of the plausible one; today if absent.
+- **Layout** — multi-paragraph operator messages (amount line, then the date, reference
+  and an advert paragraph) are kept together as one message, and advert links such as
+  `vf.eg/vfcash?id=money_transfer` are ignored so their wording cannot be mistaken for
+  a transaction.
+- **Extras** — transaction reference, counterparty name or phone (`لرقم 01037222406`
+  becomes `phone 01037222406`, and `المسجل بإسم ...` gives the registered name), and any
+  fee (`مصاريف الخدمة 1 جنيه`). The fee is shown as a note rather than added to the
+  amount, because operators usually debit it separately.
+- **Accounts** — the destination wallet is suggested when the message mentions Vodafone
+  Cash / محفظتك, and a bank account when it mentions InstaPay. Advert links are stripped
+  first, so a link containing `vfcash` cannot be mistaken for an account called "Cash".
+- **Balances are ignored** — `رصيد حسابك ... الحالي 9.20` and `المتاح 812.42EGP` never
+  become the amount, and neither do card (`رقم 6758`) or account (`رقم 0150`) numbers.
+- **Bank cards & ATM** — debit-card purchases are read with the merchant
+  (`عند CROWD POR`, `عند FAWRY*SPOT IN CAFE`, `عند NBE ATM968`), card transactions
+  suggest a bank account, and ATM withdrawals carry a reminder that moving money from
+  the bank to your Cash account needs a matching income entry.
+
+Example — an incoming Vodafone Cash message:
+
+```
+تم استلام مبلغ 200.00 جنيه من 01014271861؛
+المسجل بإسم YOSSEF ALAA ELDEIN MOHAMMED TOLBA
+على رقم محفظتك 01014271861 بتاريخ 13:42 26-10-28.
+رصيدك الحالي: 215.20 جنيه
+رقم العملية: 025177594313
+```
+is read as **income · 200.00 EGP · 28 Oct 2026** with the note
+`Vodafone Cash · YOSSEF ALAA ELDEIN MOHAMMED TOLBA · Ref 025177594313` — note that the
+`215.20` balance is not mistaken for the amount.
+
+Outgoing example — this Vodafone Cash message:
+
+```
+تم تحويل 205 جنيه لرقم 01037222406 مصاريف الخدمة 1 جنيه رصيد حسابك فى فودافون كاش الحالي 9.20.
+تاريخ العملية 13:55 26-10-28 :
+رقم العملية 025177972025 :
+```
+is read as **expense · 205.00 EGP · 28 Oct 2026 · Cash · Other expense**, with the note
+`Vodafone Cash · phone 01037222406 · Ref 025177972025` and fee `1.00 EGP`.
+- Arabic-Indic digits (٤٥٠) are converted automatically.
+
+If a message format is not recognised, the card says so and offers to fill the form
+manually with the raw text as the note.
+
+**Why not fully automatic?** Reading SMS from a native Android app requires `READ_SMS`,
+which Google Play only grants to default-SMS-handler apps; sideloaded APKs that request
+it get Play Protect warnings. On Android, a future option is the Web Share Target API
+(share the SMS straight into the installed PWA); iOS Safari does not support it, which is
+why the paste box is the default path on both platforms.
+
+Use the **Month** selector in the PF top bar for Overview and Budgets, and
+**Settings** inside the tab to change the PF currency, export/import a PF-only backup
+(`pf-backup-YYYY-MM-DD.json`) or erase PF data without touching the rest of the app.
+
+### Bank AlAhly messages
+
+`FAWRY*SPOT IN CAFE` is treated as a cafe card purchase, not a Fawry bill or
+transfer: **165 EGP expense · Bank · Food & drinks**, with note
+`Bank card · SPOT IN CAFE · Mobile payment · via Fawry`.
+The user confirmed this payment was made with Apple Pay. The SMS itself only
+says `Mobile Payment`, so the importer retains that generic label rather than
+assuming every mobile payment is Apple Pay. Apple Pay uses the linked card;
+no separate wallet expense is added. The category and note remain editable.
+
+Card, ATM and instant-transfer SMS are recognised too:
+
+```
+تم خصم 200 جنيه من بطاقة الخصم المباشر رقم 6758 باستخدام Mobile Payment عند CROWD POR يوم 28/10/26 الساعة 14:21 المتاح 812.42EGP للمزيد إتصل بـ 19623
+```
+→ **expense · 200.00 EGP · 28 Oct 2026 · bank account · note `Bank card · CROWD POR · Mobile payment`**
+
+```
+تم تنفيذ تحويل لحظي من حسابكم رقم 0150 بمبلغ 200.00 جم إلى مهاب م*** ***| رقم مرجعي 230267782328 يوم 28-10 الساعة 18:32 للمزيد اتصل بـ 19623
+```
+→ **expense · 200.00 EGP · 28 Oct 2026 · note `Bank transfer · مهاب م*** · Ref 230267782328`**
+(the account number `0150` is never mistaken for the amount, `جم` counts as a currency, and
+a date without a year — `يوم 28-10` — uses the current year)
+
+```
+تم خصم EGP 300 من بطاقة الخصم المباشر رقم 6758 عند NBE ATM968 يوم 29/10/26 الساعة 10:26 المتاح 311.92EGP
+```
+→ **expense · 300.00 EGP · 29 Oct 2026 · note `Bank card · NBE ATM968`**
 
 ## How to run
 
@@ -144,7 +297,8 @@ delete the old icon. The old Worker can then be deleted from the dashboard.
 ## How your data is stored
 
 Everything is saved in the browser's `localStorage` on **this device and this
-browser only**. Clearing browser data will erase it, so use
+browser only**. The Personal Finance tab uses its own separate key, so its data is
+included only in **PF Settings → Export PF backup**, not in the main backup file. Clearing browser data will erase it, so use
 **Settings → Export backup** regularly and keep the `.json` file somewhere safe.
 Use **Import backup** to restore, or to move the data to another browser/device.
 
@@ -158,8 +312,10 @@ wrangler.toml          # Cloudflare Workers Static Assets config
 .wranglerignore        # files excluded from the Workers upload
 icons/                 # app icons (PWA, Apple touch icon, favicon)
 css/styles.css         # all styling (mobile/tablet-first, dark theme)
+css/pf.css             # Personal Finance tab styling (incl. message importer)
 js/storage.js          # data model, localStorage, profit calculations
 js/app.js              # screens, forms, rendering and events
+js/pf.js               # Personal Finance module (own data store, UI, SMS parser)
 ```
 
 When you change app files, bump `CACHE_VERSION` in `sw.js` so installed copies
