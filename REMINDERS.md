@@ -31,7 +31,7 @@ Use a recent Node.js (22+) and Wrangler. Authenticate with `npx wrangler login`;
 never paste login credentials or private keys into chat.
 
 ```sh
-npx wrangler d1 create al-shwareb-reminders
+npx wrangler@latest d1 create al-shwareb-reminders --config server/wrangler.toml
 ```
 Put the returned database ID into **`server/wrangler.toml`**, replacing
 `REPLACE_WITH_CREATED_DATABASE_ID`. Then create its schema:
@@ -123,3 +123,28 @@ For an end-to-end check after deployment: enable on a real phone, close the app,
 and wait for the next scheduled UTC slot. Check that tapping opens PF Entries.
 Delivery on actual Apple/Google push services requires the live Cloudflare setup
 and cannot be verified by the local unit tests alone.
+
+## Troubleshooting: D1 authentication error 10000
+
+If the CLI shows an OAuth login with D1 write permission but creation fails,
+refresh the local Cloudflare login first (this is separate from GitHub/Arena):
+
+```sh
+npx wrangler@latest logout
+npx wrangler@latest login
+npx wrangler@latest whoami
+npx wrangler@latest d1 create al-shwareb-reminders --config server/wrangler.toml
+```
+
+An apparently valid login does not guarantee the failing request used valid
+credentials. If it still fails, check whether your terminal has
+`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_API_KEY`, `CLOUDFLARE_EMAIL` or account overrides
+set; these can select different credentials/accounts. Do not print or share their
+values. Alternatively create the D1 database in Cloudflare's dashboard under
+**Storage & databases → D1**, then copy its database ID into the scheduler config.
+CLI deployment may still need its authentication repaired separately.
+
+The old static Worker setting `assets.not_found_404` was invalid; it is now
+`assets.not_found_handling = "single-page-application"`. That warning is separate
+from API authentication and does not explain a D1 error 10000. Using the explicit
+scheduler config avoids loading the unrelated root static-Worker configuration.
